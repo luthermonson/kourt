@@ -1,0 +1,169 @@
+description = """
+Top-level litecone molecule: apply + capture + gate for a plan (or a
+directory of plans), then the narrative judge. The one-command end-to-end
+test a city slings:
+
+    gc sling --formula mol-litecone-test --var plan=plans/foo.plan.md
+    gc sling --formula mol-litecone-test --var plan=plans/
+
+Mechanics (apply through the apiserver, capture the revision window from
+beads /v0, run the deterministic gate, JUnit) live in the litecone BINARY and
+are invoked once by step `run`. Reasoning (reading the timeline as a light
+cone, judging the SKIPPED field/provenance lines, findings with cited
+revisions) lives in the `litecone-judge` SKILL and is applied by the judge
+agent in step `judge`. This formula is orchestration only.
+
+The molecule root bead IS the control bead — run state is recorded in its
+notes via `gc bd update <root-id> --notes "<key>: <value>"`.
+
+## Contract
+
+1. Caller slings with `--var plan=<file-or-dir>` (default `plans`), optional
+   `out_dir`, `source`, `cleanup` as in mol-litecone-run
+2. `setup` verifies binary, cluster, /v0 and lints the plans
+3. `run` executes `litecone test` once (exit 0 pass / 1 fail / 2 error)
+4. `judge` (litecone-judge agent) writes `<out_dir>/<plan>.judgment.md` for
+   every verdict in the run dir, failing plans first
+5. `finalize` prints the paths and closes the root bead with `status:`
+
+## Failure Modes
+
+| Situation | Action |
+|-----------|--------|
+| binary / cluster / beads missing | notes `gate: ...`, close bead |
+| lint fails | notes `gate: lint_failed`, close bead before any apply |
+| gate FAIL (exit 1) | judge runs (explaining the failure is the point); `status: failed` |
+| exit 2 from litecone test | `status: error`; judge skipped |"""
+formula = "mol-litecone-test"
+version = 1
+
+[vars]
+[vars.plan]
+description = "Plan file or directory of plans (default 'plans')"
+required = false
+default = "plans"
+
+[vars.out_dir]
+description = "Directory for run/verdict/judgment files (default '.litecone')"
+required = false
+default = ".litecone"
+
+[vars.source]
+description = "Timeline source: auto | journal | snapshot (default auto)"
+required = false
+default = "auto"
+
+[vars.cleanup]
+description = "Apply each plan's CLEANUP section after judging (default true)"
+required = false
+default = "true"
+
+[[steps]]
+id = "setup"
+title = "Verify litecone, the cluster and beads /v0; lint the plans"
+description = """
+Same mechanism as mol-litecone-run's setup. Nothing touches the cluster
+until the plans lint clean.
+
+```bash
+ROOT_ID=$(gc bd mol current --json 2>/dev/null | jq -r '.molecule_id // empty')
+note() { [ -n "$ROOT_ID" ] && gc bd update "$ROOT_ID" --notes "$1" || true; }
+stop() { note "status: blocked
+gate: $1
+detail: $2"; [ -n "$ROOT_ID" ] && gc bd close "$ROOT_ID" --reason "$1: $2"; exit 1; }
+
+command -v litecone >/dev/null 2>&1 || stop no_binary "litecone not on PATH"
+: "${LITECONE_BEADS:=http://127.0.0.1:8099}"
+INFO=$(litecone --json info 2>&1) || stop beads_unreachable "$INFO"
+kubectl version --request-timeout=10s >/dev/null 2>&1 || { [ -n "${KUBECONFIG:-}" ] || stop cluster_unreachable "KUBECONFIG is not set"; }
+LINT=$(litecone lint "{{plan}}" 2>&1) || stop lint_failed "$LINT"
+note "plan: {{plan}}
+out_dir: {{out_dir}}
+source: {{source}}
+beads: $LITECONE_BEADS
+journal_enabled: $(echo "$INFO" | jq -r '.journal_enabled')
+status: in_progress"
+```
+
+**Exit criteria:** preconditions proven; vars recorded.
+"""
+
+[[steps]]
+id = "run"
+title = "Apply, capture, gate: litecone test {{plan}}"
+needs = ["setup"]
+description = """
+Run the oracle once. Exit 1 is a verdict (`status: failed`), exit 2 an error.
+
+```bash
+ROOT_ID=$(gc bd mol current --json 2>/dev/null | jq -r '.molecule_id // empty')
+note() { [ -n "$ROOT_ID" ] && gc bd update "$ROOT_ID" --notes "$1" || true; }
+OUT="{{out_dir}}"; mkdir -p "$OUT"
+CLEANUP=""; [ "{{cleanup}}" = "true" ] && CLEANUP="--cleanup"
+set +e
+litecone --source "{{source}}" test "{{plan}}" $CLEANUP \\
+  --out-dir "$OUT" --report junit --report-path "$OUT/junit.xml" | tee "$OUT/stdout.txt"
+EXIT=${PIPESTATUS[0]}
+set -e
+case "$EXIT" in 0) STATUS=passed ;; 1) STATUS=failed ;; *) STATUS=error ;; esac
+note "exit: $EXIT
+run_dir: $OUT
+report: $OUT/junit.xml
+status: $STATUS"
+echo "[litecone-test] exit=$EXIT status=$STATUS run_dir=$OUT"
+[ "$EXIT" = "2" ] && exit 1
+exit 0
+```
+
+**Exit criteria:** notes record `exit:`, `run_dir:`, `report:`, `status: passed|failed`.
+"""
+
+[[steps]]
+id = "judge"
+title = "Narrative verdict for every plan in the run (litecone-judge skill)"
+needs = ["run"]
+assignee = "litecone-judge"
+description = """
+Apply the pack's own `litecone-judge` skill — read
+`${GC_PACK_DIR}/skills/litecone-judge/SKILL.md` and follow it end to end,
+once per `<plan>.verdict.json` in the run dir recorded in the root-bead
+notes (`run_dir:`), failing plans first. The skill is the single source of
+truth; do not restate it here. Write `<run_dir>/<plan>.judgment.md` per plan.
+
+```bash
+ROOT_ID=$(gc bd mol current --json 2>/dev/null | jq -r '.molecule_id // empty')
+RUN_DIR=$(gc bd show "$ROOT_ID" --json | jq -r '.[0].notes // ""' | grep -m1 '^run_dir:' | sed 's/^run_dir: //')
+ls "$RUN_DIR"/*.verdict.json
+# ... for each verdict: read its .run.json sibling, apply the skill, write <plan>.judgment.md
+gc bd update "$ROOT_ID" --notes "judgments: $(ls "$RUN_DIR"/*.judgment.md 2>/dev/null | tr '\\n' ' ')
+status: judged"
+```
+
+Never overturn a gate FAIL; never re-run the gate; cite `event id rev=N`.
+
+**Exit criteria:** one judgment file per verdict; notes record `judgments:`.
+"""
+
+[[steps]]
+id = "finalize"
+title = "Surface results and close the root bead"
+needs = ["judge"]
+description = """
+```bash
+ROOT_ID=$(gc bd mol current --json 2>/dev/null | jq -r '.molecule_id // empty')
+NOTES=$(gc bd show "$ROOT_ID" --json | jq -r '.[0].notes // ""')
+STATUS=$(echo "$NOTES" | grep -m1 '^exit:' | sed 's/^exit: //')
+RUN_DIR=$(echo "$NOTES" | grep -m1 '^run_dir:' | sed 's/^run_dir: //')
+case "$STATUS" in 0) WORD=PASSED ;; 1) WORD=FAILED ;; *) WORD=ERROR ;; esac
+cat <<EOF
+[litecone-test] $WORD  (litecone exit $STATUS)
+[litecone-test]   verdicts:  $RUN_DIR/*.verdict.json
+[litecone-test]   judgments: $RUN_DIR/*.judgment.md
+[litecone-test]   junit:     $RUN_DIR/junit.xml
+EOF
+gc bd update "$ROOT_ID" --notes "status: complete"
+gc bd close "$ROOT_ID" --reason "litecone test $WORD: $RUN_DIR"
+```
+
+**Exit criteria:** paths printed, root bead closed with `status: complete`.
+"""

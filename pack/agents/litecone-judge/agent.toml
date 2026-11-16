@@ -1,0 +1,8 @@
+# The narrative judge. A formula's `judge` step is assigned to this agent
+# (steps.assignee = "litecone-judge"); it reads skills/litecone-judge/SKILL.md
+# and the run/verdict files the previous step recorded in the root-bead notes.
+# It never re-runs the gate and never touches the cluster.
+description = "litecone narrative judge: reasons over a controller run's beads timeline as a light cone and writes a cited verdict"
+# Eligible at city and rig scope (omit `scope`): a city may hold the plans
+# centrally or a rig may carry its own plans/ next to its controller.
+idle_timeout = "10m"

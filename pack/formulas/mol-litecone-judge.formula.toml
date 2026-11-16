@@ -1,0 +1,139 @@
+description = """
+Judge a committed revision range — re-run the deterministic gate OFFLINE
+against a plan, then dispatch the litecone-judge agent for the narrative
+verdict that the gate cannot give (field semantics, flapping, "right result,
+wrong reason"), citing event ids and revisions. No cluster is touched.
+
+    gc sling --formula mol-litecone-judge --var plan=plans/foo.plan.md --var range=A..B
+    gc sling --formula mol-litecone-judge --var plan=plans/foo.plan.md --var run_dir=.litecone
+
+THIN WRAPPER. Step `replay` runs `litecone replay` (the binary is the gate);
+step `judge` applies the pack's `litecone-judge` skill — the skill is the
+single source of truth for how to read a timeline as a light cone. The steps
+below say *apply the skill*; they do not restate it.
+
+The molecule root bead IS the control bead — run state is recorded in its
+notes via `gc bd update <root-id> --notes "<key>: <value>"`.
+
+## Contract
+
+1. Caller slings with `--var plan=<plan.md>` and EITHER `--var range=A..B`
+   (re-read the window from the beads server) OR `--var run_dir=<dir>` (judge
+   the `<plan>.run.json` a previous run wrote; fully offline)
+2. Step `replay` writes `<out_dir>/<plan>.verdict.json` and records the gate exit
+3. Step `judge` (assigned to the litecone-judge agent) writes
+   `<out_dir>/<plan>.judgment.md` per the skill
+4. Root-bead notes record `gate:`, `verdict_file:`, `run_file:`, `judgment:`
+
+## Failure Modes
+
+| Situation | Action |
+|-----------|--------|
+| neither range nor run_dir given | notes `gate: no_input`, close bead |
+| plan does not lint | notes `gate: lint_failed`, close bead |
+| `litecone replay` exit 2 | notes `status: error`, exit 1 |
+| gate FAIL (exit 1) | judge still runs — explaining a failure is the point |"""
+formula = "mol-litecone-judge"
+version = 1
+
+[vars]
+[vars.plan]
+description = "Plan file (one plan; the judge narrates one run at a time)"
+required = true
+
+[vars.range]
+description = "Revision window A..B to re-read from beads /v0 (mutually exclusive with run_dir)"
+required = false
+default = ""
+
+[vars.run_dir]
+description = "Directory holding <plan>.run.json from a previous `litecone test` / mol-litecone-run (offline)"
+required = false
+default = ""
+
+[vars.out_dir]
+description = "Where to write the verdict and judgment (default '.litecone')"
+required = false
+default = ".litecone"
+
+[[steps]]
+id = "replay"
+title = "Re-run the gate offline: litecone replay {{plan}}"
+description = """
+Resolve inputs and run the deterministic gate once. With `run_dir` the step
+is fully offline (no beads, no cluster); with `range` it re-reads the window
+from `$LITECONE_BEADS`. The verdict JSON is what the judge reads next.
+
+```bash
+ROOT_ID=$(gc bd mol current --json 2>/dev/null | jq -r '.molecule_id // empty')
+note() { [ -n "$ROOT_ID" ] && gc bd update "$ROOT_ID" --notes "$1" || true; }
+stop() { note "status: blocked
+gate: $1
+detail: $2"; [ -n "$ROOT_ID" ] && gc bd close "$ROOT_ID" --reason "$1: $2"; exit 1; }
+
+command -v litecone >/dev/null 2>&1 || stop no_binary "litecone not on PATH"
+LINT=$(litecone lint "{{plan}}" 2>&1) || stop lint_failed "$LINT"
+OUT="{{out_dir}}"; mkdir -p "$OUT"
+NAME=$(litecone --json lint "{{plan}}" | jq -r '.plans[0].plan')
+VERDICT="$OUT/$NAME.verdict.json"
+set +e
+if [ -n "{{run_dir}}" ]; then
+  RUN="{{run_dir}}/$NAME.run.json"
+  [ -f "$RUN" ] || stop no_input "run file not found: $RUN"
+  litecone replay "{{plan}}" --run "$RUN" --out "$VERDICT" --report junit --report-path "$OUT/$NAME.junit.xml" | tee "$OUT/$NAME.replay.txt"
+elif [ -n "{{range}}" ]; then
+  RUN="$OUT/$NAME.run.json"
+  litecone record --range "{{range}}" --plan "{{plan}}" -o "$RUN" || stop record_failed "could not capture {{range}} from ${LITECONE_BEADS:-http://127.0.0.1:8099}"
+  litecone replay "{{plan}}" --run "$RUN" --out "$VERDICT" --report junit --report-path "$OUT/$NAME.junit.xml" | tee "$OUT/$NAME.replay.txt"
+else
+  stop no_input "give --var range=A..B or --var run_dir=<dir>"
+fi
+EXIT=${PIPESTATUS[0]}
+set -e
+[ "$EXIT" = "2" ] && { note "status: error
+gate: replay_error"; exit 1; }
+note "plan: {{plan}}
+run_file: $RUN
+verdict_file: $VERDICT
+gate: $( [ "$EXIT" = 0 ] && echo pass || echo fail )
+status: gated"
+```
+
+**Exit criteria:** verdict file written; notes record `run_file:`, `verdict_file:`, `gate: pass|fail`.
+"""
+
+[[steps]]
+id = "judge"
+title = "Narrative verdict over the light cone (litecone-judge skill)"
+needs = ["replay"]
+assignee = "litecone-judge"
+description = """
+Apply the pack's own `litecone-judge` skill — read
+`${GC_PACK_DIR}/skills/litecone-judge/SKILL.md` and follow it end to end. The
+skill is the single source of truth for reading the window as a light cone
+(root first, follow ownership outward, order within the cone, counts and
+churn), for judging the SKIPPED lines, for weighing a lossy source, and for
+the verdict format. Do not restate it here.
+
+Inputs are in the root-bead notes: `run_file:` (the ordered events + owner
+chains) and `verdict_file:` (the gate's per-line result with evidence).
+Write the judgment to `<out_dir>/<plan>.judgment.md` in the skill's format,
+then record it:
+
+```bash
+ROOT_ID=$(gc bd mol current --json 2>/dev/null | jq -r '.molecule_id // empty')
+NOTES=$( [ -n "$ROOT_ID" ] && gc bd show "$ROOT_ID" --json | jq -r '.[0].notes // ""' )
+VERDICT=$(echo "$NOTES" | grep -m1 '^verdict_file:' | sed 's/^verdict_file: //')
+JUDGMENT="${VERDICT%.verdict.json}.judgment.md"
+# ... write $JUDGMENT per the skill, then:
+gc bd update "$ROOT_ID" --notes "judgment: $JUDGMENT
+status: judged"
+gc bd close "$ROOT_ID" --reason "litecone judgment written: $JUDGMENT"
+```
+
+Rules that bind here as in the skill: never overturn a gate FAIL, never
+re-run the gate, never assert a field value you did not read, cite
+`event id rev=N` on every factual sentence.
+
+**Exit criteria:** judgment file written; root bead closed with `status: judged`.
+"""

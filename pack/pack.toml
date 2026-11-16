@@ -1,0 +1,47 @@
+# litecone — causality-first testing for Kubernetes controllers on
+# k3s-on-beads, distributed as a Gas City pack.
+#
+# Two faces, one engine:
+#   - the `litecone` BINARY is the deterministic oracle (apply -> capture the
+#     revision window from beads /v0 -> gate: ORDER, COUNTS, OWNERSHIP-SUBTREE
+#     containment; exit 0/1/2; JUnit). Mechanics live there and nowhere else.
+#   - this PACK wraps it for a city: skills your coding agent reads to author
+#     plans and to reason over a timeline as a light cone, formulas gc slings
+#     to run a plan end to end in a worker session, and a judge agent that
+#     writes the narrative verdict the gate cannot (field semantics, flapping,
+#     "right result, wrong reason").
+#
+# SELF-CONTAINED by design: no [imports.*]. It needs the `litecone` binary on
+# PATH, a kubeconfig, and a reachable beads /v0 (`bd serve`) — the two doctor
+# checks say so. Nothing here pushes, opens PRs, or mutates the city.
+#
+# THREE MODES, ONE SET OF STANDARDS:
+#   skills/   — agent-read. litecone-author: how to write a plan (the light-cone
+#               sections, the ref grammar, fail-closed). litecone-judge: how to
+#               read a run.json + verdict.json and reason over PAST / FUTURE /
+#               ELSEWHERE, citing event ids + revisions.
+#   formulas/ — gc-dispatched. Thin orchestration wrappers around the binary:
+#       mol-litecone-run    apply + capture + gate for one plan (or a dir)
+#                             gc sling --formula mol-litecone-run   --var plan=plans/foo.plan.md
+#       mol-litecone-judge  re-judge a committed range offline, then narrate
+#                             gc sling --formula mol-litecone-judge --var plan=plans/foo.plan.md --var range=A..B
+#       mol-litecone-test   the top-level molecule: run, then judge
+#                             gc sling --formula mol-litecone-test  --var plan=plans/foo.plan.md
+#     Every formula delegates standards to its sibling skill and records run
+#     state in the molecule root-bead notes (`gc bd update <root> --notes`).
+#   agents/   — litecone-judge: the narrative judge a formula's judge step is
+#               assigned to. It reads the skill; it never re-runs the gate.
+#
+# Usage in your city's pack.toml:
+#   [imports.litecone]
+#   source = "../packs/litecone"   # path; or git URL when published
+#
+# Then, inside the rig that holds your plans/ and manifests/:
+#   gc sling --formula mol-litecone-test --var plan=plans/
+#
+# Orders ship DISABLED; enable `litecone-nightly` once a city has plans.
+
+[pack]
+name = "litecone"
+version = "0.1.0"
+schema = 2
