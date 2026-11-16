@@ -24,10 +24,10 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// FieldManager is the server-side-apply manager name litecone writes under.
+// FieldManager is the server-side-apply manager name kourt writes under.
 // When per-controller provenance lands in the substrate, this is the name
 // the stimulus will show up as.
-const FieldManager = "litecone"
+const FieldManager = "kourt"
 
 // Client wraps a dynamic client with a REST mapper.
 type Client struct {

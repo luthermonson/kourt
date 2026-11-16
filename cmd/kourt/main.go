@@ -1,4 +1,4 @@
-// Command litecone is the causality-first test oracle for Kubernetes
+// Command kourt is the causality-first test oracle for Kubernetes
 // controllers running on k3s-on-beads. See README.md.
 //
 // Exit codes (the CI contract, see internal/gate/suite.go):
@@ -26,13 +26,13 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	"github.com/luthermonson/litecone/internal/beads"
-	"github.com/luthermonson/litecone/internal/gate"
-	"github.com/luthermonson/litecone/internal/k8s"
-	"github.com/luthermonson/litecone/internal/kine"
-	"github.com/luthermonson/litecone/internal/plan"
-	"github.com/luthermonson/litecone/internal/report"
-	"github.com/luthermonson/litecone/internal/timeline"
+	"github.com/luthermonson/kourt/internal/beads"
+	"github.com/luthermonson/kourt/internal/gate"
+	"github.com/luthermonson/kourt/internal/k8s"
+	"github.com/luthermonson/kourt/internal/kine"
+	"github.com/luthermonson/kourt/internal/plan"
+	"github.com/luthermonson/kourt/internal/report"
+	"github.com/luthermonson/kourt/internal/timeline"
 )
 
 // version is set by the Makefile / goreleaser via -ldflags.
@@ -60,30 +60,30 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	app := newApp(stdout, stderr)
 	args = reorderArgs(app, args)
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") && app.Command(args[0]) == nil && args[0] != "help" && args[0] != "h" {
-		fmt.Fprintf(stderr, "litecone: unknown command %q (see `litecone --help`)\n", args[0])
+		fmt.Fprintf(stderr, "kourt: unknown command %q (see `kourt --help`)\n", args[0])
 		return gate.ExitError
 	}
-	err := app.RunContext(ctx, append([]string{"litecone"}, args...))
+	err := app.RunContext(ctx, append([]string{"kourt"}, args...))
 	if err == nil {
 		return gate.ExitPass
 	}
 	var ec cli.ExitCoder
 	if errors.As(err, &ec) {
 		if msg := ec.Error(); msg != "" {
-			fmt.Fprintln(stderr, "litecone:", msg)
+			fmt.Fprintln(stderr, "kourt:", msg)
 		}
 		return ec.ExitCode()
 	}
-	fmt.Fprintln(stderr, "litecone:", err)
+	fmt.Fprintln(stderr, "kourt:", err)
 	return gate.ExitError
 }
 
 func newApp(stdout, stderr io.Writer) *cli.App {
 	app := &cli.App{
-		Name:    "litecone",
+		Name:    "kourt",
 		Usage:   "causality-first testing for Kubernetes controllers on k3s-on-beads",
 		Version: version,
-		Description: `litecone judges the committed, ordered, revision-stamped timeline of what a
+		Description: `kourt judges the committed, ordered, revision-stamped timeline of what a
 controller actually did, as recorded in the beads work-graph behind kine,
 instead of polling live cluster state. An event's PAST cone is its causes,
 its FUTURE cone its effects, and ELSEWHERE is what must not have moved.
@@ -97,10 +97,10 @@ Exit codes: 0 all plans passed; 1 a gate assertion failed; 2 could not run.`,
 		},
 		ExitErrHandler: func(*cli.Context, error) {}, // never os.Exit from inside the library
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: flagBeads, Usage: "beads /v0 base URL", Value: "http://127.0.0.1:8099", EnvVars: []string{"LITECONE_BEADS"}},
-			&cli.StringFlag{Name: flagToken, Usage: "bearer token for bd serve --auth-token-file", EnvVars: []string{"LITECONE_BEADS_TOKEN"}},
-			&cli.StringFlag{Name: flagKubeconfig, Usage: "kubeconfig path (default: $KUBECONFIG, ~/.kube/config)", EnvVars: []string{"LITECONE_KUBECONFIG"}},
-			&cli.StringFlag{Name: flagSource, Usage: "timeline source: auto|journal|snapshot", Value: "auto", EnvVars: []string{"LITECONE_SOURCE"}},
+			&cli.StringFlag{Name: flagBeads, Usage: "beads /v0 base URL", Value: "http://127.0.0.1:8099", EnvVars: []string{"KOURT_BEADS"}},
+			&cli.StringFlag{Name: flagToken, Usage: "bearer token for bd serve --auth-token-file", EnvVars: []string{"KOURT_BEADS_TOKEN"}},
+			&cli.StringFlag{Name: flagKubeconfig, Usage: "kubeconfig path (default: $KUBECONFIG, ~/.kube/config)", EnvVars: []string{"KOURT_KUBECONFIG"}},
+			&cli.StringFlag{Name: flagSource, Usage: "timeline source: auto|journal|snapshot", Value: "auto", EnvVars: []string{"KOURT_SOURCE"}},
 			&cli.BoolFlag{Name: flagJSON, Usage: "machine-readable output"},
 			&cli.BoolFlag{Name: flagQuiet, Aliases: []string{"q"}, Usage: "suppress progress on stderr"},
 		},
@@ -111,7 +111,7 @@ Exit codes: 0 all plans passed; 1 a gate assertion failed; 2 could not run.`,
 	return app
 }
 
-// reorderArgs lets flags follow positionals (`litecone replay plan.md --run
+// reorderArgs lets flags follow positionals (`kourt replay plan.md --run
 // x.json`). urfave/cli v2 stops flag parsing at the first positional, so the
 // sub-command's flags are moved in front of its arguments here. Bool flags
 // take no value; everything else consumes the next token unless written as
@@ -178,7 +178,7 @@ func capturer(c *cli.Context) *timeline.Capturer {
 	cap := &timeline.Capturer{Client: cl}
 	if !c.Bool(flagQuiet) {
 		w := c.App.ErrWriter
-		cap.Logf = func(f string, a ...any) { fmt.Fprintf(w, "litecone: "+f+"\n", a...) }
+		cap.Logf = func(f string, a ...any) { fmt.Fprintf(w, "kourt: "+f+"\n", a...) }
 	}
 	return cap
 }
@@ -188,7 +188,7 @@ func logger(c *cli.Context) func(string, ...any) {
 		return func(string, ...any) {}
 	}
 	w := c.App.ErrWriter
-	return func(f string, a ...any) { fmt.Fprintf(w, "litecone: "+f+"\n", a...) }
+	return func(f string, a ...any) { fmt.Fprintf(w, "kourt: "+f+"\n", a...) }
 }
 
 func source(c *cli.Context) (timeline.Source, error) {
@@ -231,7 +231,7 @@ func parseRange(s string) (timeline.Range, error) {
 func reportFlags() []cli.Flag {
 	return []cli.Flag{
 		&cli.StringFlag{Name: flagReport, Usage: "report format: junit (one <testcase> per plan)"},
-		&cli.StringFlag{Name: flagReportPath, Usage: "where to write the report", Value: "litecone-report.xml"},
+		&cli.StringFlag{Name: flagReportPath, Usage: "where to write the report", Value: "kourt-report.xml"},
 	}
 }
 
@@ -308,7 +308,7 @@ func planFiles(args []string) ([]string, error) {
 func cmdInfo() *cli.Command {
 	return &cli.Command{
 		Name:  "info",
-		Usage: "handshake with the beads server and report what litecone can use",
+		Usage: "handshake with the beads server and report what kourt can use",
 		Action: func(c *cli.Context) error {
 			cap := capturer(c)
 			bc, err := cap.Client.Context(c.Context)
@@ -376,7 +376,7 @@ func cmdDiff() *cli.Command {
 		},
 		Action: func(c *cli.Context) error {
 			if c.NArg() != 2 {
-				return cli.Exit("usage: litecone diff <revA> <revB>", gate.ExitError)
+				return cli.Exit("usage: kourt diff <revA> <revB>", gate.ExitError)
 			}
 			rng, err := parseRange(c.Args().Get(0) + ".." + c.Args().Get(1))
 			if err != nil {
@@ -542,7 +542,7 @@ func cmdLint() *cli.Command {
 		ArgsUsage: "<plan.md|dir> ...",
 		Action: func(c *cli.Context) error {
 			if c.NArg() < 1 {
-				return cli.Exit("usage: litecone lint <plan.md|dir> ...", gate.ExitError)
+				return cli.Exit("usage: kourt lint <plan.md|dir> ...", gate.ExitError)
 			}
 			files, err := planFiles(c.Args().Slice())
 			if err != nil {
@@ -602,13 +602,13 @@ func cmdReplay() *cli.Command {
 		Usage:     "re-judge a plan against a committed range, offline (run file) or by re-reading the server",
 		ArgsUsage: "<plan.md>",
 		Flags: append([]cli.Flag{
-			&cli.StringFlag{Name: "run", Usage: "run file written by `litecone record` or `litecone test` (offline; no cluster, no beads)"},
+			&cli.StringFlag{Name: "run", Usage: "run file written by `kourt record` or `kourt test` (offline; no cluster, no beads)"},
 			&cli.StringFlag{Name: "range", Aliases: []string{"r"}, Usage: "revision window A..B to re-read from the beads server"},
 			&cli.StringFlag{Name: "out", Aliases: []string{"o"}, Usage: "write the verdict JSON here as well"},
 		}, reportFlags()...),
 		Action: func(c *cli.Context) error {
 			if c.NArg() != 1 {
-				return cli.Exit("usage: litecone replay <plan.md> (--run run.json | --range A..B)", gate.ExitError)
+				return cli.Exit("usage: kourt replay <plan.md> (--run run.json | --range A..B)", gate.ExitError)
 			}
 			p, err := plan.ParseFile(c.Args().First())
 			if err != nil {
@@ -664,7 +664,7 @@ func cmdTest() *cli.Command {
 		Usage:     "apply each plan's inputs, capture the resulting revision range, run the gate; exit 1 if ANY plan fails",
 		ArgsUsage: "<plan.md|dir> ...",
 		Flags: append([]cli.Flag{
-			&cli.StringFlag{Name: "out-dir", Usage: "where to write <plan>.run.json and <plan>.verdict.json", Value: ".litecone"},
+			&cli.StringFlag{Name: "out-dir", Usage: "where to write <plan>.run.json and <plan>.verdict.json", Value: ".kourt"},
 			&cli.BoolFlag{Name: "skip-given", Usage: "do not apply GIVEN (preconditions already present)"},
 			&cli.BoolFlag{Name: "cleanup", Usage: "apply each plan's CLEANUP section after judging"},
 		}, reportFlags()...),
@@ -679,7 +679,7 @@ Plans run sequentially. A plan that cannot run (parse error, apply error,
 unreachable server) is an ERROR and makes the exit code 2.`,
 		Action: func(c *cli.Context) error {
 			if c.NArg() < 1 {
-				return cli.Exit("usage: litecone test <plan.md|dir> ...", gate.ExitError)
+				return cli.Exit("usage: kourt test <plan.md|dir> ...", gate.ExitError)
 			}
 			files, err := planFiles(c.Args().Slice())
 			if err != nil {

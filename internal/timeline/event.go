@@ -1,4 +1,4 @@
-// Package timeline is litecone's event model: the ordered, revision-stamped
+// Package timeline is kourt's event model: the ordered, revision-stamped
 // record of what happened to k8s objects (beads) between two kine revisions,
 // plus the ownership edges needed to reason about an event's light cone.
 //
@@ -88,10 +88,10 @@ func (r Range) String() string {
 	return fmt.Sprintf("%d..%d", r.From, r.To)
 }
 
-// Run is a captured timeline: the thing `litecone record` writes and
-// `litecone replay` reads. It is self-sufficient for offline judging.
+// Run is a captured timeline: the thing `kourt record` writes and
+// `kourt replay` reads. It is self-sufficient for offline judging.
 type Run struct {
-	Version    string    `json:"litecone"`
+	Version    string    `json:"kourt"`
 	Source     string    `json:"source"` // journal | snapshot
 	Lossy      bool      `json:"lossy"`
 	Server     string    `json:"server"`

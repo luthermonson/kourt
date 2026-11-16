@@ -8,11 +8,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/luthermonson/litecone/internal/gate"
+	"github.com/luthermonson/kourt/internal/gate"
 )
 
 // JUnit XML, in the shape GitHub Actions / Jenkins / GitLab publishers read:
-// one <testsuite> per litecone invocation, one <testcase> per plan. A failed
+// one <testsuite> per kourt invocation, one <testcase> per plan. A failed
 // plan carries one <failure> whose text lists every failed check with its
 // cited evidence (event ids + revisions); a plan that could not run is an
 // <error>.
@@ -54,9 +54,9 @@ type junitMessage struct {
 
 // WriteJUnit renders the suite as JUnit XML.
 func WriteJUnit(w io.Writer, s *gate.Suite) error {
-	js := junitSuite{Name: "litecone", Timestamp: s.StartedAt.UTC().Format("2006-01-02T15:04:05"), Time: fmt.Sprintf("%.3f", s.Duration)}
+	js := junitSuite{Name: "kourt", Timestamp: s.StartedAt.UTC().Format("2006-01-02T15:04:05"), Time: fmt.Sprintf("%.3f", s.Duration)}
 	for _, v := range s.Verdicts {
-		tc := junitCase{Name: v.Plan, ClassName: "litecone.plan", Time: "0"}
+		tc := junitCase{Name: v.Plan, ClassName: "kourt.plan", Time: "0"}
 		var out strings.Builder
 		fmt.Fprintf(&out, "range=%s source=%s lossy=%v events=%d passed=%d failed=%d skipped=%d\n", v.Range, v.Source, v.Lossy, v.Events, v.Passed, v.Failed, v.Skipped)
 		for _, n := range v.Notes {
@@ -90,7 +90,7 @@ func WriteJUnit(w io.Writer, s *gate.Suite) error {
 			js.Tests++
 			js.Skipped++
 			js.Cases = append(js.Cases, junitCase{
-				Name: fmt.Sprintf("%s :: %s L%d %s", v.Plan, c.Section, c.LineNo, c.Text), ClassName: "litecone.assertion", Time: "0",
+				Name: fmt.Sprintf("%s :: %s L%d %s", v.Plan, c.Section, c.LineNo, c.Text), ClassName: "kourt.assertion", Time: "0",
 				Skipped: &junitMessage{Message: c.Reason},
 			})
 		}
@@ -98,7 +98,7 @@ func WriteJUnit(w io.Writer, s *gate.Suite) error {
 	for _, e := range s.Errors {
 		js.Tests++
 		js.Errors++
-		js.Cases = append(js.Cases, junitCase{Name: e.Plan, ClassName: "litecone.plan", Time: "0",
+		js.Cases = append(js.Cases, junitCase{Name: e.Plan, ClassName: "kourt.plan", Time: "0",
 			Error: &junitMessage{Message: "could not run", Type: "error", Body: e.Err}})
 	}
 	doc := junitSuites{Tests: js.Tests, Failures: js.Failures, Errors: js.Errors, Time: js.Time, Suites: []junitSuite{js}}

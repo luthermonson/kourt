@@ -1,11 +1,11 @@
 # goreleaser v2 config. `goreleaser release --snapshot --clean` builds every
 # target locally; the Makefile's `cross` target does the same without goreleaser.
 version: 2
-project_name: litecone
+project_name: kourt
 builds:
-  - id: litecone
-    main: ./cmd/litecone
-    binary: litecone
+  - id: kourt
+    main: ./cmd/kourt
+    binary: kourt
     env:
       - CGO_ENABLED=0
     flags:

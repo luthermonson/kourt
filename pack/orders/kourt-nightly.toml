@@ -1,9 +1,9 @@
 # Nightly: run every plan under plans/ and judge the results. Ships DISABLED;
 # flip `enabled` once the city (or rig) carries plans. An order cannot pass
-# required vars, so mol-litecone-test's `plan` var defaults to "plans".
+# required vars, so mol-kourt-test's `plan` var defaults to "plans".
 [order]
-description = "Nightly litecone run + judge of every plan under plans/"
-formula = "mol-litecone-test"
+description = "Nightly kourt run + judge of every plan under plans/"
+formula = "mol-kourt-test"
 trigger = "cron"
 schedule = "0 6 * * *"
 pool = "worker"

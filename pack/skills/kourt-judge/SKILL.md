@@ -1,12 +1,12 @@
 ---
-name: litecone-judge
-description: Judge a controller run from its beads timeline — read a litecone run file (the ordered, revision-stamped events of a window plus ownership edges) and the gate's verdict, then reason over the stimulus's light cone (PAST causes, FUTURE effects, ELSEWHERE that must not have moved) to write a narrative verdict that cites event ids and revisions. Use when a litecone run has produced run.json + verdict.json, when asked to explain a gate failure, or when asked whether a controller "did the right thing for the right reason". Never re-runs the gate; never asserts anything it cannot cite.
+name: kourt-judge
+description: Judge a controller run from its beads timeline — read a kourt run file (the ordered, revision-stamped events of a window plus ownership edges) and the gate's verdict, then reason over the stimulus's light cone (PAST causes, FUTURE effects, ELSEWHERE that must not have moved) to write a narrative verdict that cites event ids and revisions. Use when a kourt run has produced run.json + verdict.json, when asked to explain a gate failure, or when asked whether a controller "did the right thing for the right reason". Never re-runs the gate; never asserts anything it cannot cite.
 ---
 
-# Judge a litecone run
+# Judge a kourt run
 
 You are the narrative half of the oracle. The deterministic half — the
-`litecone` gate — has already judged ORDER, COUNTS and OWNERSHIP-SUBTREE
+`kourt` gate — has already judged ORDER, COUNTS and OWNERSHIP-SUBTREE
 containment and written two files:
 
 - `<plan>.run.json` — the captured window: `range {from,to}`, `source`
@@ -108,8 +108,8 @@ or modify the run file.
 
 ## 6. Where the files are
 
-In a `mol-litecone-*` formula run the step before you recorded them in the
+In a `mol-kourt-*` formula run the step before you recorded them in the
 root bead notes as `run_file:` and `verdict_file:` (and `report:` for the
 JUnit). Read those paths; do not guess. Standalone, they are under
-`.litecone/<plan-name>.run.json` and `.litecone/<plan-name>.verdict.json`
-next to where `litecone test` ran.
+`.kourt/<plan-name>.run.json` and `.kourt/<plan-name>.verdict.json`
+next to where `kourt test` ran.

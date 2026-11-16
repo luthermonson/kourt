@@ -8,7 +8,7 @@
 //	issue_type   = the resource segment of the key (pods, deployments, ...)
 //
 // Deep decoding of "v" (the k8s protobuf value) is deliberately out of scope:
-// litecone operates at the object + revision + event level.
+// kourt operates at the object + revision + event level.
 package kine
 
 import (

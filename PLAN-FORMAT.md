@@ -1,9 +1,9 @@
-# The litecone plan format
+# The kourt plan format
 
 > **Status: grammar LOCKED by the repo owner (2026-11-15).** The parser
 > (`internal/plan`) implements exactly this. What the gate can evaluate
 > today versus what it parses but reports **SKIPPED** is spelled out below;
-> nothing is silently passed. `litecone lint <plan.md|dir>` tells you, per
+> nothing is silently passed. `kourt lint <plan.md|dir>` tells you, per
 > line, whether it is machine-checked, skipped, prose, or malformed.
 
 A plan is a Markdown file. It states **intent and the expected light cone**

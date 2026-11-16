@@ -1,18 +1,18 @@
 description = """
-Run litecone plans mechanically — apply each plan's GIVEN/WHEN inputs through
+Run kourt plans mechanically — apply each plan's GIVEN/WHEN inputs through
 the apiserver, capture the revision window from beads /v0, run the
 deterministic gate, write run.json / verdict.json / JUnit. The gc-dispatched
-mode of `litecone test`: same output the binary produces on a laptop, run
+mode of `kourt test`: same output the binary produces on a laptop, run
 inside a transient worker session so a city can sling it on demand.
 
-    gc sling --formula mol-litecone-run --var plan=plans/foo.plan.md
-    gc sling --formula mol-litecone-run --var plan=plans/            # a directory of plans
+    gc sling --formula mol-kourt-run --var plan=plans/foo.plan.md
+    gc sling --formula mol-kourt-run --var plan=plans/            # a directory of plans
 
 THIN WRAPPER. This formula is orchestration only: it resolves the root bead,
 checks the binary and the two endpoints, runs ONE command, and records the
-outcome. ALL judging lives in the litecone binary (the gate) — nothing here
+outcome. ALL judging lives in the kourt binary (the gate) — nothing here
 re-implements an assertion. No narrative judge runs here; use
-mol-litecone-test for run + judge, or mol-litecone-judge for an offline judge.
+mol-kourt-test for run + judge, or mol-kourt-judge for an offline judge.
 
 The molecule root bead IS the control bead — run state is recorded in its
 notes via `gc bd update <root-id> --notes "<key>: <value>"`.
@@ -20,10 +20,10 @@ notes via `gc bd update <root-id> --notes "<key>: <value>"`.
 ## Contract
 
 1. Caller slings with `--var plan=<file-or-dir>` (default `plans`), optional
-   `--var out_dir=` (default `.litecone`), `--var source=auto|journal|snapshot`,
+   `--var out_dir=` (default `.kourt`), `--var source=auto|journal|snapshot`,
    `--var cleanup=true|false` (default true: apply each plan's CLEANUP after judging)
-2. Step `setup` verifies `litecone`, `$KUBECONFIG` and `$LITECONE_BEADS`
-3. Step `run` executes `litecone test` once; exit 0 pass / 1 gate fail / 2 could not run
+2. Step `setup` verifies `kourt`, `$KUBECONFIG` and `$KOURT_BEADS`
+3. Step `run` executes `kourt test` once; exit 0 pass / 1 gate fail / 2 could not run
 4. Root-bead notes record `exit:`, `run_dir:`, `report:`, `status:`
 5. Agent exits — a gate FAIL is a normal completion with `status: failed`,
    not an error; the caller reads the verdict files
@@ -32,13 +32,13 @@ notes via `gc bd update <root-id> --notes "<key>: <value>"`.
 
 | Situation | Action |
 |-----------|--------|
-| `litecone` not on PATH | notes `gate: no_binary`, close bead |
-| `litecone info` cannot reach /v0 | notes `gate: beads_unreachable`, close bead |
+| `kourt` not on PATH | notes `gate: no_binary`, close bead |
+| `kourt info` cannot reach /v0 | notes `gate: beads_unreachable`, close bead |
 | kubeconfig unusable | notes `gate: cluster_unreachable`, close bead |
-| `litecone lint` exit 2 | notes `gate: lint_failed` + the lint output, close bead |
-| `litecone test` exit 1 | notes `status: failed`, exit 0 (a verdict, not an error) |
-| `litecone test` exit 2 | notes `status: error`, exit 1 |"""
-formula = "mol-litecone-run"
+| `kourt lint` exit 2 | notes `gate: lint_failed` + the lint output, close bead |
+| `kourt test` exit 1 | notes `status: failed`, exit 0 (a verdict, not an error) |
+| `kourt test` exit 2 | notes `status: error`, exit 1 |"""
+formula = "mol-kourt-run"
 version = 1
 
 [vars]
@@ -48,9 +48,9 @@ required = false
 default = "plans"
 
 [vars.out_dir]
-description = "Directory for <plan>.run.json / <plan>.verdict.json / junit.xml (default '.litecone')"
+description = "Directory for <plan>.run.json / <plan>.verdict.json / junit.xml (default '.kourt')"
 required = false
-default = ".litecone"
+default = ".kourt"
 
 [vars.source]
 description = "Timeline source: auto (journal when enabled, else lossy snapshot), journal, snapshot"
@@ -64,12 +64,12 @@ default = "true"
 
 [[steps]]
 id = "setup"
-title = "Verify the litecone binary, the cluster and the beads /v0 door"
+title = "Verify the kourt binary, the cluster and the beads /v0 door"
 description = """
 Resolve the root bead and prove the three things the run needs. This is pure
-mechanism — no judgment happens here. `litecone info` does the beads
+mechanism — no judgment happens here. `kourt info` does the beads
 handshake (and says whether the events journal is on, i.e. whether the
-timeline will be exact or lossy); `litecone lint` refuses malformed plans
+timeline will be exact or lossy); `kourt lint` refuses malformed plans
 before anything touches the cluster.
 
 ```bash
@@ -79,17 +79,17 @@ stop() { note "status: blocked
 gate: $1
 detail: $2"; [ -n "$ROOT_ID" ] && gc bd close "$ROOT_ID" --reason "$1: $2"; exit 1; }
 
-command -v litecone >/dev/null 2>&1 || stop no_binary "litecone not on PATH (make build && export PATH=\\$PWD/bin:\\$PATH, or install a release)"
-: "${LITECONE_BEADS:=http://127.0.0.1:8099}"
-INFO=$(litecone --json info 2>&1) || stop beads_unreachable "$INFO"
+command -v kourt >/dev/null 2>&1 || stop no_binary "kourt not on PATH (make build && export PATH=\\$PWD/bin:\\$PATH, or install a release)"
+: "${KOURT_BEADS:=http://127.0.0.1:8099}"
+INFO=$(kourt --json info 2>&1) || stop beads_unreachable "$INFO"
 kubectl version --request-timeout=10s >/dev/null 2>&1 || { [ -n "${KUBECONFIG:-}" ] || stop cluster_unreachable "KUBECONFIG is not set"; }
-LINT=$(litecone lint "{{plan}}" 2>&1) || stop lint_failed "$LINT"
+LINT=$(kourt lint "{{plan}}" 2>&1) || stop lint_failed "$LINT"
 
 JOURNAL=$(echo "$INFO" | jq -r '.journal_enabled')
 note "plan: {{plan}}
 out_dir: {{out_dir}}
 source: {{source}}
-beads: $LITECONE_BEADS
+beads: $KOURT_BEADS
 journal_enabled: $JOURNAL
 status: in_progress"
 ```
@@ -99,7 +99,7 @@ status: in_progress"
 
 [[steps]]
 id = "run"
-title = "Apply, capture, gate: litecone test {{plan}}"
+title = "Apply, capture, gate: kourt test {{plan}}"
 needs = ["setup"]
 description = """
 Run the oracle exactly once. Everything that decides pass/fail is inside the
@@ -113,7 +113,7 @@ note() { [ -n "$ROOT_ID" ] && gc bd update "$ROOT_ID" --notes "$1" || true; }
 OUT="{{out_dir}}"; mkdir -p "$OUT"
 CLEANUP=""; [ "{{cleanup}}" = "true" ] && CLEANUP="--cleanup"
 set +e
-litecone --source "{{source}}" test "{{plan}}" $CLEANUP \\
+kourt --source "{{source}}" test "{{plan}}" $CLEANUP \\
   --out-dir "$OUT" --report junit --report-path "$OUT/junit.xml" | tee "$OUT/stdout.txt"
 EXIT=${PIPESTATUS[0]}
 set -e
@@ -127,12 +127,12 @@ run_dir: $OUT
 report: $OUT/junit.xml
 stdout: $OUT/stdout.txt
 status: $STATUS"
-echo "[litecone-run] exit=$EXIT status=$STATUS run_dir=$OUT"
+echo "[kourt-run] exit=$EXIT status=$STATUS run_dir=$OUT"
 [ "$EXIT" = "2" ] && exit 1
 exit 0
 ```
 
-**Exit criteria:** `litecone test` ran; notes record `exit:`, `run_dir:`, `report:`, `status:` (passed | failed | error).
+**Exit criteria:** `kourt test` ran; notes record `exit:`, `run_dir:`, `report:`, `status:` (passed | failed | error).
 """
 
 [[steps]]
@@ -142,7 +142,7 @@ needs = ["run"]
 description = """
 Print where the artifacts are and close the root bead with the status. No
 further work: the caller reads `<out_dir>/<plan>.verdict.json`, or dispatches
-`mol-litecone-judge` for the narrative.
+`mol-kourt-judge` for the narrative.
 
 ```bash
 ROOT_ID=$(gc bd mol current --json 2>/dev/null | jq -r '.molecule_id // empty')
@@ -150,13 +150,13 @@ NOTES=$( [ -n "$ROOT_ID" ] && gc bd show "$ROOT_ID" --json | jq -r '.[0].notes /
 STATUS=$(echo "$NOTES" | grep -m1 '^status:' | sed 's/^status: //')
 RUN_DIR=$(echo "$NOTES" | grep -m1 '^run_dir:' | sed 's/^run_dir: //')
 cat <<EOF
-[litecone-run] status: $STATUS
-[litecone-run]   run files: $RUN_DIR/*.run.json
-[litecone-run]   verdicts:  $RUN_DIR/*.verdict.json
-[litecone-run]   junit:     $RUN_DIR/junit.xml
-[litecone-run] Next: gc sling --formula mol-litecone-judge --var plan={{plan}} --var run_dir=$RUN_DIR
+[kourt-run] status: $STATUS
+[kourt-run]   run files: $RUN_DIR/*.run.json
+[kourt-run]   verdicts:  $RUN_DIR/*.verdict.json
+[kourt-run]   junit:     $RUN_DIR/junit.xml
+[kourt-run] Next: gc sling --formula mol-kourt-judge --var plan={{plan}} --var run_dir=$RUN_DIR
 EOF
-[ -n "$ROOT_ID" ] && gc bd close "$ROOT_ID" --reason "litecone run $STATUS: $RUN_DIR"
+[ -n "$ROOT_ID" ] && gc bd close "$ROOT_ID" --reason "kourt run $STATUS: $RUN_DIR"
 ```
 
 **Exit criteria:** paths printed, root bead closed with the run status.

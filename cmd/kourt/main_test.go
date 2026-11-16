@@ -174,7 +174,7 @@ func TestBinaryExitCode(t *testing.T) {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("go not on PATH")
 	}
-	bin := filepath.Join(t.TempDir(), "litecone")
+	bin := filepath.Join(t.TempDir(), "kourt")
 	if runtime.GOOS == "windows" {
 		bin += ".exe"
 	}

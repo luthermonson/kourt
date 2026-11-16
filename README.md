@@ -1,9 +1,9 @@
-# litecone
+# kourt
 
 Causality-first testing for Kubernetes controllers, built on **k3s-on-beads**:
 a real k3s cluster whose datastore (kine) stores every object as a bead in a
 Dolt-versioned beads work-graph. Instead of polling live cluster state until
-it matches (Chainsaw, kuttl, `Eventually(...)`), litecone **judges the
+it matches (Chainsaw, kuttl, `Eventually(...)`), kourt **judges the
 committed, ordered, revision-stamped timeline of what a controller actually
 did**.
 
@@ -48,14 +48,14 @@ that decided it. The plan grammar is in [PLAN-FORMAT.md](PLAN-FORMAT.md).
 
 ## Why a timeline beats polling
 
-| | apply-and-poll | litecone |
+| | apply-and-poll | kourt |
 |---|---|---|
 | Asserts | presence of an end state | the complete, ordered changeset |
 | Side effects | invisible | `elsewhere changed` fails on any write outside the ownership subtree |
 | Order / causality | not observable | hard edges over revisions (`then`, `after`, `finally`, `concurrent with`); ownership via `created-by` |
 | Counts | "at least one" | exact (`×2`), bounds (`×1+`), absence (`×0`) |
 | Settling | a timeout guess | quiescence on the subtree; timeout is a failure, not a flake |
-| Re-judging | re-run the cluster | `litecone replay` on a recorded window, offline |
+| Re-judging | re-run the cluster | `kourt replay` on a recorded window, offline |
 
 ## Architecture: one repo, two faces
 
@@ -63,7 +63,7 @@ that decided it. The plan grammar is in [PLAN-FORMAT.md](PLAN-FORMAT.md).
                  plan.md                      k3s-on-beads substrate
                     │                   ┌───────────────────────────────┐
    ┌────────────────▼──────────────┐    │ k3s apiserver ─► kine-beads   │
-   │  litecone (Go binary)         │    │                   │ (beads lib)│
+   │  kourt (Go binary)         │    │                   │ (beads lib)│
    │  ├ plan parser                │    │           dolt ◄──┤            │
    │  ├ k8s: client-go SSA apply ──┼────┼─► objects  ▲      │            │
    │  ├ beads /v0 http client ─────┼────┼────────────┴── bd serve /v0    │
@@ -73,16 +73,16 @@ that decided it. The plan grammar is in [PLAN-FORMAT.md](PLAN-FORMAT.md).
    └───────────────┬───────────────┘
                    │ run.json + verdict.json
    ┌───────────────▼───────────────┐
-   │  pack/ (Gas City)             │   gc sling --formula mol-litecone-test --var plan=...
+   │  pack/ (Gas City)             │   gc sling --formula mol-kourt-test --var plan=...
    │  skills: author, judge        │   → run (binary) → judge (agent reads the skill)
    │  formulas: run, judge, test   │
-   │  agents: litecone-judge       │
+   │  agents: kourt-judge       │
    └───────────────────────────────┘
 ```
 
 **(A) The binary** is the deterministic oracle. Self-contained and static
 (no kubectl, no bd, no bash): plan inputs go through `client-go`
-(server-side apply, field manager `litecone`); the timeline comes from the
+(server-side apply, field manager `kourt`); the timeline comes from the
 beads **/v0 HTTP API** via plain `net/http`. It cross-compiles for
 linux/darwin/windows × amd64/arm64.
 
@@ -91,7 +91,7 @@ and to judge a run as a light cone, formulas `gc sling` runs in a worker
 session, and a judge agent for the narrative verdict the gate cannot give.
 See [pack/README.md](pack/README.md).
 
-### The substrate's object model, as litecone reads it
+### The substrate's object model, as kourt reads it
 
 One etcd key = one bead. `external_ref`/`title` = `/registry/<resource>/<ns>/<name>`;
 `issue_type` = the resource (grouped keys are typed by their API group);
@@ -145,7 +145,7 @@ says so (`×0`).
 | 1 | a gate assertion failed: EXPECT unmet, THROUGHOUT violated, NEVER tripped, SETTLE timed out |
 | 2 | could not run: cluster or /v0 unreachable, plan parse/lint error, bad arguments, no plans found |
 
-`cmd/litecone/main_test.go` pins these against fixture plans (one that must
+`cmd/kourt/main_test.go` pins these against fixture plans (one that must
 fail with a tripped NEVER and an unmet EXPECT), including by building the
 binary and checking the process exit status, and checks the JUnit marks the
 failure with its evidence.
@@ -153,20 +153,20 @@ failure with its evidence.
 ## Commands
 
 ```sh
-litecone info                                  # /v0 handshake, journal on/off, head revision
-litecone rev                                   # current head kine revision
-litecone diff <revA> <revB> [--events] [--json]   # full changeset between two revisions (B may be `head`)
-litecone record --range A..B -o run.json [--plan p.md]   # capture a window for offline replay
-litecone lint <plan.md|dir> ...                # machine / skipped / prose / error per line; exit 2 on error
-litecone test <plan.md|dir> ... [--cleanup] [--out-dir .litecone] [--report junit --report-path f.xml]
-litecone replay <plan.md> (--run run.json | --range A..B) [--report junit ...]   # re-judge, offline with --run
+kourt info                                  # /v0 handshake, journal on/off, head revision
+kourt rev                                   # current head kine revision
+kourt diff <revA> <revB> [--events] [--json]   # full changeset between two revisions (B may be `head`)
+kourt record --range A..B -o run.json [--plan p.md]   # capture a window for offline replay
+kourt lint <plan.md|dir> ...                # machine / skipped / prose / error per line; exit 2 on error
+kourt test <plan.md|dir> ... [--cleanup] [--out-dir .kourt] [--report junit --report-path f.xml]
+kourt replay <plan.md> (--run run.json | --range A..B) [--report junit ...]   # re-judge, offline with --run
 ```
 
-Global flags: `--beads URL` (`$LITECONE_BEADS`, default `http://127.0.0.1:8099`),
+Global flags: `--beads URL` (`$KOURT_BEADS`, default `http://127.0.0.1:8099`),
 `--kubeconfig PATH` (`$KUBECONFIG`), `--source auto|journal|snapshot`,
 `--json`, `-q`. Flags may follow positionals.
 
-`litecone test` per plan: apply GIVEN and settle; `A = head`; apply WHEN;
+`kourt test` per plan: apply GIVEN and settle; `A = head`; apply WHEN;
 settle on the subtree (quiescence or timeout); `B = head`; capture `(A, B]`;
 judge; write `<out-dir>/<plan>.run.json` and `.verdict.json`; `--cleanup`
 applies CLEANUP. Plans run sequentially; the suite exits non-zero if any
@@ -175,7 +175,7 @@ plan fails.
 ## Build
 
 ```sh
-make build        # bin/litecone for the host (CGO_ENABLED=0, static)
+make build        # bin/kourt for the host (CGO_ENABLED=0, static)
 make test         # unit tests incl. the exit-code contract and the pack validator
 make cross        # dist/ for linux,darwin,windows × amd64,arm64
 make check        # vet + test + build
@@ -187,7 +187,7 @@ goreleaser release --snapshot --clean   # same matrix via .goreleaser.yaml
 `.github/workflows/e2e.yml` is a sample GitHub Actions job: build → lint
 plans → `ci/up.sh` (dolt sql-server, kine-beads in server mode, `bd serve`,
 k3s with `--datastore-endpoint` at kine) → deploy the controller →
-`litecone test plans/ --report junit` → publish JUnit (`if: always()`) →
+`kourt test plans/ --report junit` → publish JUnit (`if: always()`) →
 `ci/down.sh` (`if: always()`). The test step's non-zero exit is what turns
 the check red. The scripts are a correct skeleton that has not yet run on a
 hosted runner; the open question is whether kine-beads (beads library with
@@ -197,7 +197,7 @@ it needed `CGO_ENABLED=1 -tags gms_pure_go`.
 ## Repository layout
 
 ```
-cmd/litecone/          the CLI (urfave/cli v2) + exit-code tests and fixtures
+cmd/kourt/          the CLI (urfave/cli v2) + exit-code tests and fixtures
 internal/beads/        net/http client for the beads /v0 API
 internal/kine/         the k3s-on-beads object model (keys, {v,cr,mr,del})
 internal/timeline/     Event/Run model, journal + snapshot capture, diff, owner chains

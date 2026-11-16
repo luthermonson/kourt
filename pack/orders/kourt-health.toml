@@ -2,7 +2,7 @@
 # Deterministic maintenance, so it is an `exec` order (no pool, runs on the
 # orchestrator). Ships DISABLED.
 [order]
-description = "Check the beads /v0 door and the events journal litecone depends on"
+description = "Check the beads /v0 door and the events journal kourt depends on"
 trigger = "cooldown"
 interval = "10m"
 exec = "$ORDER_DIR/../doctor/check-beads.sh"

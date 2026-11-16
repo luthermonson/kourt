@@ -32,11 +32,11 @@ func TestPackIsSelfContained(t *testing.T) {
 	if err := toml.Unmarshal(b, &pack); err != nil {
 		t.Fatal(err)
 	}
-	if pack.Pack.Name != "litecone" || pack.Pack.Schema != 2 || pack.Pack.Version == "" {
+	if pack.Pack.Name != "kourt" || pack.Pack.Schema != 2 || pack.Pack.Version == "" {
 		t.Fatalf("pack = %+v", pack.Pack)
 	}
 	if regexp.MustCompile(`(?m)^\[imports\.`).Match(b) {
-		t.Fatal("litecone pack must not import any pack — it is self-contained")
+		t.Fatal("kourt pack must not import any pack — it is self-contained")
 	}
 }
 
@@ -59,7 +59,7 @@ type formula struct {
 
 func TestFormulas(t *testing.T) {
 	files, _ := filepath.Glob(filepath.Join(root, "formulas", "*.formula.toml"))
-	want := map[string]bool{"mol-litecone-run": true, "mol-litecone-judge": true, "mol-litecone-test": true}
+	want := map[string]bool{"mol-kourt-run": true, "mol-kourt-judge": true, "mol-kourt-test": true}
 	if len(files) != len(want) {
 		t.Fatalf("formulas = %v", files)
 	}
@@ -112,11 +112,11 @@ func TestFormulas(t *testing.T) {
 					t.Errorf("%s: step %s references undeclared var {{%s}}", f, s.ID, m[1])
 				}
 			}
-			if s.ID == "judge" && s.Assignee != "litecone-judge" {
-				t.Errorf("%s: the judge step must be assigned to the litecone-judge agent", f)
+			if s.ID == "judge" && s.Assignee != "kourt-judge" {
+				t.Errorf("%s: the judge step must be assigned to the kourt-judge agent", f)
 			}
-			if s.ID == "judge" && !strings.Contains(s.Description, "skills/litecone-judge/SKILL.md") {
-				t.Errorf("%s: the judge step must delegate to the litecone-judge skill", f)
+			if s.ID == "judge" && !strings.Contains(s.Description, "skills/kourt-judge/SKILL.md") {
+				t.Errorf("%s: the judge step must delegate to the kourt-judge skill", f)
 			}
 		}
 		if fm.Steps[0].Needs != nil {
@@ -146,7 +146,7 @@ func TestSkills(t *testing.T) {
 		}
 		got[dir] = true
 	}
-	for _, want := range []string{"litecone-author", "litecone-judge"} {
+	for _, want := range []string{"kourt-author", "kourt-judge"} {
 		if !got[want] {
 			t.Errorf("missing skill %s", want)
 		}
@@ -154,7 +154,7 @@ func TestSkills(t *testing.T) {
 }
 
 func TestAgents(t *testing.T) {
-	agent := filepath.Join(root, "agents", "litecone-judge")
+	agent := filepath.Join(root, "agents", "kourt-judge")
 	b, err := os.ReadFile(filepath.Join(agent, "agent.toml"))
 	if err != nil {
 		t.Fatal(err)

@@ -1,4 +1,4 @@
-module github.com/luthermonson/litecone
+module github.com/luthermonson/kourt
 
 go 1.27.4
 

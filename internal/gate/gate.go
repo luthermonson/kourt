@@ -1,4 +1,4 @@
-// Package gate is litecone's deterministic oracle. It takes a parsed plan
+// Package gate is kourt's deterministic oracle. It takes a parsed plan
 // and a captured timeline and answers pass / fail / skip per line, citing
 // the events (ids + revisions) that decided each answer.
 //
@@ -22,9 +22,9 @@ import (
 	"path"
 	"strings"
 
-	"github.com/luthermonson/litecone/internal/kine"
-	"github.com/luthermonson/litecone/internal/plan"
-	"github.com/luthermonson/litecone/internal/timeline"
+	"github.com/luthermonson/kourt/internal/kine"
+	"github.com/luthermonson/kourt/internal/plan"
+	"github.com/luthermonson/kourt/internal/timeline"
 )
 
 // Evidence cites one event.

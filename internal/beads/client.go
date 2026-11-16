@@ -88,7 +88,7 @@ func (c *Context) Has(cap string) bool {
 	return false
 }
 
-// Issue is the subset of the issue wire shape litecone reads.
+// Issue is the subset of the issue wire shape kourt reads.
 type Issue struct {
 	ID          string   `json:"id"`
 	Title       string   `json:"title"`

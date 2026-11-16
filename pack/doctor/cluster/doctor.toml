@@ -1,2 +1,2 @@
-description = 'the k3s-on-beads apiserver (and the litecone binary) are reachable, so plans can be applied'
+description = 'the k3s-on-beads apiserver (and the kourt binary) are reachable, so plans can be applied'
 run = '../check-cluster.sh'

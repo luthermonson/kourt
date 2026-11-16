@@ -3,7 +3,7 @@
 # never fails the job (the workflow runs it with `if: always()` and the test
 # step's exit code is what decides red/green).
 set -uo pipefail
-WORKDIR="${LITECONE_CI_DIR:-$HOME/k3s-beads}"
+WORKDIR="${KOURT_CI_DIR:-$HOME/k3s-beads}"
 log() { echo "[down] $*" >&2; }
 
 if command -v k3s-uninstall.sh >/dev/null 2>&1 || [ -x /usr/local/bin/k3s-uninstall.sh ]; then

@@ -10,7 +10,7 @@ and Events keep churning in the background; they are excepted explicitly
 rather than ignored silently.
 
 ## SUBTREE
-- configmaps/litecone-smoke
+- configmaps/kourt-smoke
 
 ## GIVEN
 (nothing — the cluster as it stands)
@@ -19,11 +19,11 @@ rather than ignored silently.
 - apply manifests/configmap.yaml
 
 ## EXPECT
-- configmaps/litecone-smoke created
+- configmaps/kourt-smoke created
 
 ## THROUGHOUT
-- configmaps/litecone-smoke ×1 changed
-- configmaps/litecone-smoke ×0 deleted
+- configmaps/kourt-smoke ×1 changed
+- configmaps/kourt-smoke ×0 deleted
 
 ## NEVER
 - elsewhere changed except nodes/*, leases/*, events/*, endpointslices/*, services/*, masterleases/*, peerserverleases/*
@@ -37,4 +37,4 @@ rather than ignored silently.
 - delete manifests/configmap.yaml
 
 ## EVIDENCE
-The create event for configmaps/litecone-smoke, with its revision; zero offenders for `elsewhere`.
+The create event for configmaps/kourt-smoke, with its revision; zero offenders for `elsewhere`.

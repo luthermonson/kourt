@@ -1,4 +1,4 @@
-// Package plan parses litecone plan files to the LOCKED grammar in
+// Package plan parses kourt plan files to the LOCKED grammar in
 // PLAN-FORMAT.md. The parser is small and explicit about what it does:
 //
 //   - a plan is Markdown; `# PLAN <name>` names it; `## SECTION` opens one

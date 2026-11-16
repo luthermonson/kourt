@@ -4,11 +4,11 @@
 # SKELETON. Every step is real but the whole has not been run on a GitHub
 # runner yet. Produces, and exports via $GITHUB_ENV when present:
 #   KUBECONFIG      kubeconfig for the k3s apiserver
-#   LITECONE_BEADS  the beads /v0 base URL (bd serve)
+#   KOURT_BEADS  the beads /v0 base URL (bd serve)
 #
 # Topology (mirrors the working macOS setup, 2026-11-15):
 #   dolt sql-server :3307  <- kine-beads (beads library, server mode) :2379 <- k3s apiserver
-#                          <- bd serve :8099 (same workspace, read by litecone)
+#                          <- bd serve :8099 (same workspace, read by kourt)
 #
 # Open question (see README "CI"): kine-beads is built from the fork branch
 # `beads-backend` of github.com/luthermonson/kine with the beads library
@@ -18,7 +18,7 @@
 # build is possible depends on beads' build tags, which we have not verified.
 set -euo pipefail
 
-WORKDIR="${LITECONE_CI_DIR:-$HOME/k3s-beads}"
+WORKDIR="${KOURT_CI_DIR:-$HOME/k3s-beads}"
 DOLT_VERSION="${DOLT_VERSION:-2.6.0}"
 BD_VERSION="${BD_VERSION:-1.3.4}"
 K3S_VERSION="${K3S_VERSION:-v1.37.2+k3s1}"
@@ -38,8 +38,8 @@ if ! command -v dolt >/dev/null 2>&1; then
   curl -fsSL "https://github.com/dolthub/dolt/releases/download/v${DOLT_VERSION}/dolt-linux-amd64.tar.gz" \
     | tar -xz -C "$WORKDIR" && mv "$WORKDIR/dolt-linux-amd64/bin/dolt" "$WORKDIR/bin/dolt"
 fi
-dolt config --global --add user.email ci@litecone.invalid >/dev/null
-dolt config --global --add user.name litecone-ci >/dev/null
+dolt config --global --add user.email ci@kourt.invalid >/dev/null
+dolt config --global --add user.name kourt-ci >/dev/null
 
 # 2. bd (beads CLI; provides `bd serve` and the workspace init)
 if ! command -v bd >/dev/null 2>&1; then
@@ -82,7 +82,7 @@ nohup "$WORKDIR/bin/kine-beads" \
 echo $! > "$WORKDIR/kine.pid"
 sleep 3
 
-# 5. bd serve — the /v0 door litecone reads
+# 5. bd serve — the /v0 door kourt reads
 log "starting bd serve on :$BEADS_PORT"
 nohup bd -C "$WORKDIR" serve --addr "127.0.0.1:${BEADS_PORT}" > "$WORKDIR/log/bd-serve.log" 2>&1 &
 echo $! > "$WORKDIR/bd.pid"
@@ -98,10 +98,10 @@ for _ in $(seq 1 60); do sudo k3s kubectl get nodes >/dev/null 2>&1 && break; sl
 cp /etc/rancher/k3s/k3s.yaml "$WORKDIR/kubeconfig"
 
 export KUBECONFIG="$WORKDIR/kubeconfig"
-export LITECONE_BEADS="http://127.0.0.1:${BEADS_PORT}"
+export KOURT_BEADS="http://127.0.0.1:${BEADS_PORT}"
 if [ -n "${GITHUB_ENV:-}" ]; then
-  { echo "KUBECONFIG=$KUBECONFIG"; echo "LITECONE_BEADS=$LITECONE_BEADS"; echo "LITECONE_CI_DIR=$WORKDIR"; } >> "$GITHUB_ENV"
+  { echo "KUBECONFIG=$KUBECONFIG"; echo "KOURT_BEADS=$KOURT_BEADS"; echo "KOURT_CI_DIR=$WORKDIR"; } >> "$GITHUB_ENV"
 fi
-log "up: KUBECONFIG=$KUBECONFIG LITECONE_BEADS=$LITECONE_BEADS"
+log "up: KUBECONFIG=$KUBECONFIG KOURT_BEADS=$KOURT_BEADS"
 kubectl get nodes
-curl -fsS "$LITECONE_BEADS/v0/beads/issues:count"; echo
+curl -fsS "$KOURT_BEADS/v0/beads/issues:count"; echo

@@ -1,20 +1,20 @@
 ---
-name: litecone-author
-description: Write a litecone plan — a Markdown test for a Kubernetes controller that is judged against the committed, ordered, revision-stamped beads timeline of what the controller actually did, not against polled live state. Use when asked to write, translate (from Chainsaw, kuttl, Ginkgo) or review a controller/operator e2e test for a k3s-on-beads cluster. Teaches the light-cone sections (INTENT / SUBTREE / GIVEN / WHEN / EXPECT / THROUGHOUT / NEVER / SETTLE / EVIDENCE), the `<kind>/<name-glob> ×N <what>` matcher grammar, the partial-order keywords (then / after / finally / concurrent with), which assertions the gate evaluates versus reports SKIPPED, and the fail-closed rule. Self-contained; the only tool it needs is the `litecone` binary for `litecone lint`.
+name: kourt-author
+description: Write a kourt plan — a Markdown test for a Kubernetes controller that is judged against the committed, ordered, revision-stamped beads timeline of what the controller actually did, not against polled live state. Use when asked to write, translate (from Chainsaw, kuttl, Ginkgo) or review a controller/operator e2e test for a k3s-on-beads cluster. Teaches the light-cone sections (INTENT / SUBTREE / GIVEN / WHEN / EXPECT / THROUGHOUT / NEVER / SETTLE / EVIDENCE), the `<kind>/<name-glob> ×N <what>` matcher grammar, the partial-order keywords (then / after / finally / concurrent with), which assertions the gate evaluates versus reports SKIPPED, and the fail-closed rule. Self-contained; the only tool it needs is the `kourt` binary for `kourt lint`.
 ---
 
-# Author a litecone plan
+# Author a kourt plan
 
 You are writing a test whose oracle is a **timeline**, not an end state. The
 substrate (k3s on kine on beads) commits every object write as a bead
 mutation with a global, monotonic **revision**, and models `ownerReferences`
 as parent-child edges. A plan says what the controller must have caused, in
 what partial order, how many times, and what it must not have touched. The
-binary (`litecone test`) applies the inputs, captures the revision window
-`(A, B]`, and runs the deterministic gate. The `litecone-judge` agent reads
+binary (`kourt test`) applies the inputs, captures the revision window
+`(A, B]`, and runs the deterministic gate. The `kourt-judge` agent reads
 the rest.
 
-The grammar is `PLAN-FORMAT.md` in the litecone repo (locked). This skill is
+The grammar is `PLAN-FORMAT.md` in the kourt repo (locked). This skill is
 how to *think* in it.
 
 ## 1. Think in the light cone
@@ -125,10 +125,10 @@ object's create and last write only) and says so in the verdict notes.
   absence: `machines/bad-* ×0 created` and `NEVER machinesets/bad-* created`;
   the gate fails if children appear.
 
-## 9. Run `litecone lint` before anything else
+## 9. Run `kourt lint` before anything else
 
 ```
-litecone lint plans/            # exit 0 = every plan parses and asserts something structural
+kourt lint plans/            # exit 0 = every plan parses and asserts something structural
 ```
 
 It lists each SKIPPED line (fine, expected), each prose line (the judge's
@@ -153,4 +153,4 @@ From Chainsaw / kuttl `assert:` files or Ginkgo `Eventually(...).Should(...)`:
 - [ ] NEVER has `elsewhere changed except ...` with specific background refs.
 - [ ] Field / provenance claims are present and understood to be SKIPPED.
 - [ ] SETTLE has a quiescence window and a real timeout.
-- [ ] `litecone lint` exits 0.
+- [ ] `kourt lint` exits 0.

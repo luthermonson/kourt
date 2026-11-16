@@ -21,7 +21,7 @@ type Change struct {
 	Owners []string `json:"owners,omitempty"`
 }
 
-// Changeset is the per-object view of a run: `litecone diff`'s answer.
+// Changeset is the per-object view of a run: `kourt diff`'s answer.
 type Changeset struct {
 	Range   Range    `json:"range"`
 	Source  string   `json:"source"`

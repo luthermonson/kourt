@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/luthermonson/litecone/internal/plan"
+	"github.com/luthermonson/kourt/internal/plan"
 )
 
 // Exit codes: the binary's CI contract.
@@ -14,7 +14,7 @@ const (
 	ExitError = 2 // could not run: cluster or /v0 unreachable, plan parse/lint error, bad arguments
 )
 
-// Suite aggregates the verdicts of one `litecone test` invocation.
+// Suite aggregates the verdicts of one `kourt test` invocation.
 type Suite struct {
 	StartedAt time.Time  `json:"started_at"`
 	Duration  float64    `json:"duration_seconds"`

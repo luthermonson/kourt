@@ -10,7 +10,7 @@ quiet. Deployment status writes trail the pod creates, so the only hard
 edge drawn is ReplicaSet-before-Pods.
 
 ## SUBTREE
-- deployments/litecone-podinfo
+- deployments/kourt-podinfo
 
 ## GIVEN
 - apply manifests/podinfo-1.yaml
@@ -20,29 +20,29 @@ edge drawn is ReplicaSet-before-Pods.
 
 ## EXPECT
 [deploy]
-- deployments/litecone-podinfo ×1+ updated
-- deployments/litecone-podinfo .spec.replicas 1→3
+- deployments/kourt-podinfo ×1+ updated
+- deployments/kourt-podinfo .spec.replicas 1→3
 
 [rs]
-- replicasets/litecone-podinfo-* ×1+ updated
+- replicasets/kourt-podinfo-* ×1+ updated
 
 [pods] after rs
-- pods/litecone-podinfo-* ×2 created-by replicasets/litecone-podinfo-*
-- pods/litecone-podinfo-* phase Pending→Running
-- pods/litecone-podinfo-* condition Ready=True
+- pods/kourt-podinfo-* ×2 created-by replicasets/kourt-podinfo-*
+- pods/kourt-podinfo-* phase Pending→Running
+- pods/kourt-podinfo-* condition Ready=True
 
 [ready] finally
-- deployments/litecone-podinfo .status.availableReplicas set
+- deployments/kourt-podinfo .status.availableReplicas set
 
 ## THROUGHOUT
-- pods/litecone-podinfo-* ×2 created
-- replicasets/litecone-podinfo-* ×0 created    # a scale is not a rollout
-- pods/litecone-podinfo-* ×0 deleted
+- pods/kourt-podinfo-* ×2 created
+- replicasets/kourt-podinfo-* ×0 created    # a scale is not a rollout
+- pods/kourt-podinfo-* ×0 deleted
 
 ## NEVER
 - elsewhere changed except nodes/*, leases/*, events/*, endpointslices/*, services/*, masterleases/*, peerserverleases/*
-- pods/litecone-podinfo-* deleted
-- deployments/litecone-podinfo .spec.replicas 3→1
+- pods/kourt-podinfo-* deleted
+- deployments/kourt-podinfo .spec.replicas 3→1
 
 ## SETTLE
 - quiescence 10s on the subtree
