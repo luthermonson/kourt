@@ -211,6 +211,11 @@ pack/                  the Gas City pack (skills, formulas, agent, orders, docto
 ci/                    up.sh / down.sh for the e2e workflow
 ```
 
+## Further reading
+
+- [docs/agentic-judge.md](docs/agentic-judge.md) — the gc judge + remand-bead flow end to end, and the full CI workflow (boot k3s-on-beads, gate, judge, upload artifacts).
+- [PLAN-FORMAT.md](PLAN-FORMAT.md) — the locked plan grammar.
+
 ## Status (2026-11-15)
 
 - `diff`, `record`, `info`, `rev` validated against the live k3s-on-beads
