@@ -1,0 +1,26 @@
+# Four pods that cannot fit on the single existing worker: each requests
+# more CPU than a mirage node advertises, so they stay Pending until the
+# autoscaler adds Machines. Adjust the request to the mirage node capacity.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scale-test
+  namespace: default
+  labels:
+    app.kubernetes.io/managed-by: litecone
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: scale-test
+  template:
+    metadata:
+      labels:
+        app: scale-test
+    spec:
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10
+          resources:
+            requests:
+              cpu: "3"

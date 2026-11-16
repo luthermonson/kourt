@@ -1,0 +1,94 @@
+# PLACEHOLDER for the mirage fake CAPI provider (cluster-api-provider-mirage,
+# built in parallel). Group/kind/field names are a best guess at the usual
+# CAPI infrastructure-provider shape and must be reconciled with the real
+# CRDs before this plan runs against a cluster.
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: demo
+  namespace: default
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks: ["192.168.0.0/16"]
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+    kind: MirageCluster
+    name: demo
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    kind: KubeadmControlPlane
+    name: demo-cp
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: MirageCluster
+metadata:
+  name: demo
+  namespace: default
+spec: {}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: MirageMachineTemplate
+metadata:
+  name: demo-cp
+  namespace: default
+spec:
+  template:
+    spec: {}
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: KubeadmControlPlane
+metadata:
+  name: demo-cp
+  namespace: default
+spec:
+  replicas: 1
+  version: v1.31.0
+  machineTemplate:
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+      kind: MirageMachineTemplate
+      name: demo-cp
+  kubeadmConfigSpec: {}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: MirageMachineTemplate
+metadata:
+  name: demo-md
+  namespace: default
+spec:
+  template:
+    spec: {}
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: KubeadmConfigTemplate
+metadata:
+  name: demo-md
+  namespace: default
+spec:
+  template:
+    spec: {}
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineDeployment
+metadata:
+  name: demo-md
+  namespace: default
+spec:
+  clusterName: demo
+  replicas: 2
+  selector:
+    matchLabels: {}
+  template:
+    spec:
+      clusterName: demo
+      version: v1.31.0
+      bootstrap:
+        configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          kind: KubeadmConfigTemplate
+          name: demo-md
+      infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+        kind: MirageMachineTemplate
+        name: demo-md

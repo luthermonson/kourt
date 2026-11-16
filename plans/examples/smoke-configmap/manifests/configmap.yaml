@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litecone-smoke
+  namespace: default
+  labels:
+    app.kubernetes.io/managed-by: litecone
+data:
+  hello: world

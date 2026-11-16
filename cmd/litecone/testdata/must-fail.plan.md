@@ -1,17 +1,23 @@
 # PLAN fixture-must-fail
 
 ## INTENT
-This plan MUST fail the gate: it expects a ReplicaSet that is never created
-(unmet EXPECT) and forbids anything outside podinfo's ownership subtree,
-which the stray configmap write trips (tripped NEVER). CI relies on this
-fixture exiting non-zero.
+This plan MUST fail the gate: it expects a ReplicaSet create that never
+happens (unmet EXPECT), and it forbids anything outside podinfo's ownership
+subtree, which the stray configmap write trips (tripped NEVER). CI relies on
+this fixture exiting non-zero.
+
+## SUBTREE
+- deployments/podinfo
 
 ## EXPECT
-1. update deployments/default/podinfo
-2. create replicasets/default/podinfo-*
+[deploy]
+- deployments/podinfo ×2 updated
+
+[rs] then
+- replicasets/podinfo-* created
 
 ## THROUGHOUT
-- count create pods/default/podinfo-* == 2
+- pods/podinfo-* ×2 created
 
 ## NEVER
-- outside deployments/default/podinfo
+- elsewhere changed

@@ -79,14 +79,12 @@ func FailSettle(v *Verdict, quiet, timeout time.Duration, head int64) {
 // gate can check is a failure, not a pass. Absence of assertions must never
 // read as absence of problems.
 func FailClosed(p *plan.Plan, v *Verdict) {
-	machine := 0
-	for _, l := range p.Lines {
-		if l.Machine() && (l.Step != nil || l.Invariant != nil || l.Never != nil) {
-			machine++
-		}
-	}
+	machine, skipped, _, _ := p.Counts()
 	if machine == 0 {
-		v.add(Check{Section: plan.SecExpect, Text: "(fail-closed guard)", Status: "fail",
-			Reason: "the plan has no machine-checkable EXPECT/THROUGHOUT/NEVER line; add at least one, or `count any ** == 0` to assert nothing happened"})
+		reason := "the plan has no structural EXPECT/THROUGHOUT/NEVER assertion the gate can evaluate; add at least one (created/deleted/updated/changed with a count, or `elsewhere`), or `<kind>/<glob> ×0 changed` to assert nothing happened"
+		if skipped > 0 {
+			reason = fmt.Sprintf("all %d assertions are SKIPPED (field-decode / provenance pending) and nothing structural was evaluated; %s", skipped, reason)
+		}
+		v.add(Check{Section: plan.SecExpect, Text: "(fail-closed guard)", Status: "fail", Reason: reason})
 	}
 }

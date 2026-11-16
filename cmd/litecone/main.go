@@ -495,24 +495,30 @@ func lintPlan(p *plan.Plan) (rows []lintRow, machine, prose, errs int) {
 		case l.Err != "":
 			r.Kind = "error"
 			errs++
+		case l.Skipped:
+			r.Kind = "skipped"
 		case l.Prose:
 			r.Kind = "prose"
 			prose++
 		default:
 			r.Kind = "machine"
-			machine++
+			if l.Machine() {
+				machine++
+			}
 		}
 		rows = append(rows, r)
 	}
-	asserts := 0
-	for _, l := range p.Lines {
-		if l.Machine() && (l.Step != nil || l.Invariant != nil || l.Never != nil) {
-			asserts++
-		}
-	}
-	if asserts == 0 {
+	if machine == 0 {
 		errs++
-		rows = append(rows, lintRow{Kind: "error", Err: "plan has no machine-checkable EXPECT/THROUGHOUT/NEVER line (fail-closed)"})
+		rows = append(rows, lintRow{Kind: "error", Err: "plan has no structural EXPECT/THROUGHOUT/NEVER assertion the gate can evaluate (fail-closed)"})
+	}
+	if len(p.Roots()) == 0 {
+		for _, l := range p.Section(plan.SecNever) {
+			if l.Never != nil && l.Never.Kind == "elsewhere" {
+				errs++
+				rows = append(rows, lintRow{Kind: "error", Line: l.LineNo, Section: l.Section, Err: "`elsewhere` needs a SUBTREE section with at least one root"})
+			}
+		}
 	}
 	for _, sec := range []string{plan.SecGiven, plan.SecWhen, plan.SecCleanup} {
 		for _, a := range p.Actions(sec) {
@@ -740,7 +746,7 @@ unreachable server) is an ERROR and makes the exit code 2.`,
 // means the plan could not be run (not a gate failure).
 func runPlan(ctx context.Context, p *plan.Plan, cap *timeline.Capturer, kc *k8s.Client, src timeline.Source,
 	skipGiven, cleanup bool, outDir string, logf func(string, ...any)) (*gate.Verdict, error) {
-	quiet, timeout := p.Quiet()
+	quiet, timeout := p.Quiescence()
 	dir := filepath.Dir(p.Path)
 	runActions := func(section string) error {
 		for _, a := range p.Actions(section) {
@@ -765,12 +771,34 @@ func runPlan(ctx context.Context, p *plan.Plan, cap *timeline.Capturer, kc *k8s.
 		return nil
 	}
 
-	logf("[%s] start", p.Name)
+	// Quiescence is judged ON THE SUBTREE: a write counts as activity only
+	// when its object is a SUBTREE root or has one in its owner chain. The
+	// global revision never stops moving on a live cluster (node leases renew
+	// every few seconds), so this is the only meaningful settle signal. The
+	// owner chain of each bead is resolved once and cached.
+	roots := p.Roots()
+	chains := map[string][]string{}
+	keep := func(is *beads.Issue) bool {
+		if len(roots) == 0 {
+			return true // no SUBTREE: fall back to the global head
+		}
+		chain, ok := chains[is.ID]
+		if !ok {
+			var err error
+			chain, err = cap.OwnerChain(ctx, is.ID, 16)
+			if err != nil {
+				chain = nil
+			}
+			chains[is.ID] = chain
+		}
+		return gate.InSubtreeKey(roots, is.Key(), chain)
+	}
+	logf("[%s] start (quiescence on subtree %s)", p.Name, refList(roots))
 	if !skipGiven && len(p.Actions(plan.SecGiven)) > 0 {
 		if err := runActions(plan.SecGiven); err != nil {
 			return nil, err
 		}
-		if _, _, err := settle(ctx, cap, quiet, timeout, logf); err != nil {
+		if _, _, err := settle(ctx, cap, keep, quiet, timeout, logf); err != nil {
 			return nil, err
 		}
 	}
@@ -782,7 +810,13 @@ func runPlan(ctx context.Context, p *plan.Plan, cap *timeline.Capturer, kc *k8s.
 	if err := runActions(plan.SecWhen); err != nil {
 		return nil, err
 	}
-	to, timedOut, err := settle(ctx, cap, quiet, timeout, logf)
+	_, timedOut, err := settle(ctx, cap, keep, quiet, timeout, logf)
+	if err != nil {
+		return nil, err
+	}
+	// B is the unfiltered head: the window must contain every write, so
+	// NEVER can see background keys the plan did NOT except.
+	to, err := cap.Head(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -813,6 +847,17 @@ func runPlan(ctx context.Context, p *plan.Plan, cap *timeline.Capturer, kc *k8s.
 	return v, nil
 }
 
+func refList(refs []plan.Ref) string {
+	if len(refs) == 0 {
+		return "(none: global head)"
+	}
+	s := make([]string, len(refs))
+	for i, r := range refs {
+		s[i] = r.String()
+	}
+	return strings.Join(s, ", ")
+}
+
 func safeName(s string) string {
 	return strings.Map(func(r rune) rune {
 		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.' {
@@ -825,14 +870,14 @@ func safeName(s string) string {
 // settle polls the head revision until it has not moved for `quiet`, or
 // `timeout` elapses. timedOut is reported to the caller, which records it
 // as a gate failure: a controller that never goes quiet is a finding.
-func settle(ctx context.Context, cap *timeline.Capturer, quiet, timeout time.Duration, logf func(string, ...any)) (head int64, timedOut bool, err error) {
+func settle(ctx context.Context, cap *timeline.Capturer, keep func(*beads.Issue) bool, quiet, timeout time.Duration, logf func(string, ...any)) (head int64, timedOut bool, err error) {
 	deadline := time.Now().Add(timeout)
-	head, err = cap.Head(ctx)
+	head, err = cap.HeadWhereIssue(ctx, keep)
 	if err != nil {
 		return 0, false, err
 	}
 	lastMove := time.Now()
-	logf("settling: head=%d quiet=%s timeout=%s", head, quiet, timeout)
+	logf("settling: scoped head=%d quiet=%s timeout=%s", head, quiet, timeout)
 	for {
 		if time.Since(lastMove) >= quiet {
 			return head, false, nil
@@ -846,7 +891,7 @@ func settle(ctx context.Context, cap *timeline.Capturer, quiet, timeout time.Dur
 			return head, false, ctx.Err()
 		case <-time.After(time.Second):
 		}
-		h, err := cap.Head(ctx)
+		h, err := cap.HeadWhereIssue(ctx, keep)
 		if err != nil {
 			return 0, false, err
 		}
@@ -864,6 +909,7 @@ func printVerdict(w io.Writer, v *gate.Verdict) {
 	}
 	fmt.Fprintf(w, "%s  plan=%s range=%s source=%s events=%d  (%d passed, %d failed, %d skipped)\n",
 		status, v.Plan, v.Range, v.Source, v.Events, v.Passed, v.Failed, v.Skipped)
+	fmt.Fprintf(w, "      %s\n", v.Summary())
 	for _, n := range v.Notes {
 		fmt.Fprintf(w, "note: %s\n", n)
 	}

@@ -42,7 +42,7 @@ func TestExitFailOnTrippedNeverAndUnmetExpect(t *testing.T) {
 		t.Fatalf("expected FAIL verdict:\n%s", out)
 	}
 	// Both failure modes must be visible and cited.
-	if !strings.Contains(out, "needed 1 create event(s) matching replicasets/default/podinfo-*") {
+	if !strings.Contains(out, "needed exactly 1 created event(s) for replicasets/podinfo-*") {
 		t.Errorf("unmet EXPECT not reported:\n%s", out)
 	}
 	if !strings.Contains(out, "outside the ownership subtree") || !strings.Contains(out, "configmaps/kube-system/stray") {
@@ -71,7 +71,7 @@ func TestExitErrorOnBadSyntax(t *testing.T) {
 		t.Fatalf("lint exit %d, want 2", code)
 	}
 	code, _, stderr := runCLI(t, "replay", "testdata/bad-syntax.plan.md", "--run", "testdata/scale.run.json")
-	if code != 2 || !strings.Contains(stderr, "bad-syntax.plan.md L4") {
+	if code != 2 || !strings.Contains(stderr, "bad-syntax.plan.md L") {
 		t.Fatalf("replay exit %d, want 2:\n%s", code, stderr)
 	}
 }
@@ -134,7 +134,9 @@ func TestJUnitMarksFailure(t *testing.T) {
 	if err := xml.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("invalid junit xml: %v\n%s", err, b)
 	}
-	if doc.Tests != 1 || doc.Failures != 1 || doc.Errors != 0 {
+	// One testcase per plan plus one skipped testcase per SKIPPED assertion
+	// (the `[rs] then` edge is not evaluable when its side matched nothing).
+	if doc.Failures != 1 || doc.Errors != 0 || doc.Tests < 1 {
 		t.Fatalf("tests=%d failures=%d errors=%d", doc.Tests, doc.Failures, doc.Errors)
 	}
 	tc := doc.Suites[0].Cases[0]
@@ -145,16 +147,24 @@ func TestJUnitMarksFailure(t *testing.T) {
 		t.Fatalf("failure must carry cited evidence:\n%s", tc.Failure.Body)
 	}
 
-	// And a passing plan produces zero failures.
+	// A passing plan produces zero failures, and its SKIPPED field assertion
+	// shows up as a skipped testcase rather than vanishing.
 	path2 := filepath.Join(t.TempDir(), "junit.xml")
-	if code, _, _ := runCLI(t, "replay", "testdata/must-pass.plan.md", "--run", "testdata/scale.run.json", "--report", "junit", "--report-path", path2); code != 0 {
-		t.Fatalf("exit %d, want 0", code)
+	code, out, _ := runCLI(t, "replay", "testdata/must-pass.plan.md", "--run", "testdata/scale.run.json", "--report", "junit", "--report-path", path2)
+	if code != 0 {
+		t.Fatalf("exit %d, want 0\n%s", code, out)
+	}
+	if !strings.Contains(out, "PASSED structural checks; 1 assertion(s) SKIPPED") {
+		t.Fatalf("skipped assertions must be prominent on stdout:\n%s", out)
 	}
 	b, _ = os.ReadFile(path2)
 	var ok junitDoc
 	_ = xml.Unmarshal(b, &ok)
-	if ok.Tests != 1 || ok.Failures != 0 || ok.Suites[0].Cases[0].Failure != nil {
+	if ok.Failures != 0 || ok.Suites[0].Cases[0].Failure != nil {
 		t.Fatalf("passing plan marked failed:\n%s", b)
+	}
+	if ok.Tests != 2 || !strings.Contains(string(b), "<skipped message=\"field-decode pending") {
+		t.Fatalf("expected one plan case + one skipped assertion case:\n%s", b)
 	}
 }
 

@@ -3,6 +3,7 @@ module github.com/luthermonson/litecone
 go 1.27.4
 
 require (
+	github.com/BurntSushi/toml v1.5.0
 	github.com/urfave/cli/v2 v2.27.7
 	k8s.io/apimachinery v0.34.1
 	k8s.io/client-go v0.34.1

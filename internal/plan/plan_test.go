@@ -6,40 +6,57 @@ import (
 	"time"
 )
 
-const sample = `# PLAN podinfo-scale
+const sample = `# PLAN capi-autoscale-up
 
-Some preamble prose that is ignored.
+Preamble prose, ignored.
 
 ## INTENT
-Scaling podinfo to 3 replicas creates exactly two new pods under its ReplicaSet and touches nothing else.
+Four unschedulable pods make the autoscaler scale demo-md.
+
+## SUBTREE
+- machinedeployments/demo-md
 
 ## GIVEN
-- apply manifests/podinfo.yaml
+(a provisioned cluster)
+- wait 5s
 
 ## WHEN
-- apply manifests/podinfo-3.yaml   # scale up
+- apply manifests/pending-pods.yaml   # the stimulus
 
-## EXPECT (timeline -- order matters)
-1. update deployments/default/podinfo
-2. update replicasets/default/podinfo-*
-3. create pods/default/podinfo-* x2  -- the two new replicas
-4. the pods become Ready (narrative only)
+## EXPECT
+[pending]
+- pods/scale-test-* ×4 created
+- pods/scale-test-* condition PodScheduled=False
+
+[scale] then
+- machinedeployments/demo-md .spec.replicas 1→3
+- machinedeployments/demo-md updated
+- machines/demo-md-* x2 created-by machinesets/demo-md-*
+- miragemachines/demo-md-* ×2+ created
+
+[nodes] after scale
+- nodes/demo-md-* ×2 created
+
+- machines/demo-md-* phase Pending->Running after nodes
+- finally clusters/demo condition Ready=True
+- the pods eventually bind (prose)
 
 ## THROUGHOUT
-- count create pods/default/podinfo-* == 2
-- unchanged deployments/kube-system/coredns
-- no pod flaps (prose)
+- machines/demo-md-* ×0 deleted
+- no machine flaps (prose)
 
 ## NEVER
-- outside deployments/default/podinfo except events/default/*, leases/**
-- delete pods/default/podinfo-*
+- elsewhere changed except pods/scale-test-*, nodes/*, leases/*
+- machinedeployments/demo-md deleted
+- the ONLY actor writing machines is mirage
+- machines/demo-cp-* phase Running→Failed
 
 ## SETTLE
-- quiet 15s
-- timeout 3m
+- quiescence 20s on the subtree
+- timeout 10m
 
 ## EVIDENCE
-Cite the create events for line 3 with revisions.
+Cite revisions.
 `
 
 func TestParse(t *testing.T) {
@@ -47,71 +64,116 @@ func TestParse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Name != "podinfo-scale" {
+	if p.Name != "capi-autoscale-up" {
 		t.Fatalf("name = %q", p.Name)
 	}
-	if got := p.Actions(SecGiven); len(got) != 1 || got[0].Verb != "apply" || got[0].Path != "manifests/podinfo.yaml" {
-		t.Fatalf("GIVEN actions = %+v", got)
+	if roots := p.Roots(); len(roots) != 1 || roots[0].Kind != "machinedeployments" || roots[0].Name != "demo-md" {
+		t.Fatalf("roots = %+v", roots)
 	}
-	if got := p.Actions(SecWhen); len(got) != 1 || got[0].Path != "manifests/podinfo-3.yaml" {
-		t.Fatalf("WHEN actions = %+v (comment not stripped?)", got)
+	if a := p.Actions(SecGiven); len(a) != 1 || a[0].Verb != "wait" || a[0].Wait != 5*time.Second {
+		t.Fatalf("GIVEN actions = %+v", a)
 	}
-	steps := p.Steps()
-	if len(steps) != 3 {
-		t.Fatalf("steps = %d, want 3 (prose line must not be a step)", len(steps))
+	if a := p.Actions(SecWhen); len(a) != 1 || a[0].Verb != "apply" || a[0].Path != "manifests/pending-pods.yaml" {
+		t.Fatalf("WHEN actions = %+v (comment not stripped?)", a)
 	}
-	if steps[2].Step.Count != 2 || steps[2].Step.Ref != "/registry/pods/default/podinfo-*" || steps[2].Step.Op != OpCreate {
-		t.Fatalf("step 3 = %+v", steps[2].Step)
+
+	ex := p.Section(SecExpect)
+	// [pending]
+	if ex[0].Group == nil || ex[0].Group.Label != "pending" || len(ex[0].Group.Orders) != 0 {
+		t.Fatalf("group header 1 = %+v", ex[0])
 	}
-	expect := p.Section(SecExpect)
-	if !expect[3].Prose {
-		t.Fatal("line 4 of EXPECT should be prose")
+	if s := ex[1].Step; s == nil || s.Group != "pending" || s.Count != 4 || s.AtLeast || s.What != Created || s.Ref.Kind != "pods" || s.Ref.Name != "scale-test-*" {
+		t.Fatalf("step 1 = %+v", ex[1])
 	}
+	if s := ex[2].Step; s == nil || s.What != Condition || !ex[2].Skipped {
+		t.Fatalf("condition must parse as SKIPPED: %+v", ex[2])
+	}
+	// [scale] then
+	if g := ex[3].Group; g == nil || g.Label != "scale" || len(g.Orders) != 1 || g.Orders[0].Kind != "then" {
+		t.Fatalf("group header 2 = %+v", ex[3])
+	}
+	if s := ex[4].Step; s == nil || s.What != Field || !ex[4].Skipped {
+		t.Fatalf("field transition must be SKIPPED: %+v", ex[4])
+	}
+	if s := ex[5].Step; s == nil || s.What != Updated || s.Group != "scale" {
+		t.Fatalf("updated = %+v", ex[5])
+	}
+	if s := ex[6].Step; s == nil || s.What != CreatedBy || s.Count != 2 || s.Owner == nil || s.Owner.Kind != "machinesets" || s.Owner.Name != "demo-md-*" {
+		t.Fatalf("created-by = %+v", ex[6])
+	}
+	if s := ex[7].Step; s == nil || s.Count != 2 || !s.AtLeast {
+		t.Fatalf("×2+ = %+v", ex[7])
+	}
+	// [nodes] after scale
+	if g := ex[8].Group; g == nil || g.Orders[0].Kind != "after" || g.Orders[0].Target != "scale" {
+		t.Fatalf("group header 3 = %+v", ex[8])
+	}
+	// trailing `after nodes` on a skipped line
+	if s := ex[10].Step; s == nil || s.What != Phase || len(s.Orders) != 1 || s.Orders[0].Kind != "after" || s.Orders[0].Target != "nodes" {
+		t.Fatalf("trailing after = %+v", ex[10])
+	}
+	if s := ex[11].Step; s == nil || len(s.Orders) != 1 || s.Orders[0].Kind != "finally" {
+		t.Fatalf("leading finally = %+v", ex[11])
+	}
+	if !ex[12].Prose {
+		t.Fatalf("prose line = %+v", ex[12])
+	}
+
 	thr := p.Section(SecThroughout)
-	if thr[0].Invariant == nil || thr[0].Invariant.Kind != "count" || thr[0].Invariant.Cmp != "==" || thr[0].Invariant.N != 2 {
-		t.Fatalf("invariant 1 = %+v", thr[0].Invariant)
+	if thr[0].Inv == nil || thr[0].Inv.Count != 0 || thr[0].Inv.What != Deleted {
+		t.Fatalf("invariant = %+v", thr[0])
 	}
-	if thr[1].Invariant == nil || thr[1].Invariant.Kind != "unchanged" || thr[1].Invariant.Ref != "/registry/deployments/kube-system/coredns" {
-		t.Fatalf("invariant 2 = %+v", thr[1].Invariant)
+	if !thr[1].Prose {
+		t.Fatal("prose invariant")
 	}
-	if !thr[2].Prose {
-		t.Fatal("invariant 3 should be prose")
+
+	nv := p.Section(SecNever)
+	if nv[0].Never == nil || nv[0].Never.Kind != "elsewhere" || len(nv[0].Never.Excepts) != 3 || nv[0].Never.Excepts[2].Kind != "leases" {
+		t.Fatalf("elsewhere = %+v", nv[0].Never)
 	}
-	never := p.Section(SecNever)
-	if never[0].Never == nil || never[0].Never.Kind != "outside" || never[0].Never.Ref != "/registry/deployments/default/podinfo" {
-		t.Fatalf("never 1 = %+v", never[0].Never)
+	if nv[1].Never == nil || nv[1].Never.Kind != "matcher" || nv[1].Never.Matcher.What != Deleted {
+		t.Fatalf("never deleted = %+v", nv[1].Never)
 	}
-	if len(never[0].Never.Excepts) != 2 || never[0].Never.Excepts[0] != "/registry/events/default/*" || never[0].Never.Excepts[1] != "/registry/leases/**" {
-		t.Fatalf("excepts = %v", never[0].Never.Excepts)
+	if !nv[2].Skipped || nv[2].Never.Matcher.What != Provenance {
+		t.Fatalf("provenance NEVER must be SKIPPED: %+v", nv[2])
 	}
-	if never[1].Never == nil || never[1].Never.Kind != "op" || never[1].Never.Op != OpDelete {
-		t.Fatalf("never 2 = %+v", never[1].Never)
+	if !nv[3].Skipped || nv[3].Never.Matcher.What != Phase {
+		t.Fatalf("field NEVER must be SKIPPED: %+v", nv[3])
 	}
-	q, to := p.Quiet()
-	if q != 15*time.Second || to != 3*time.Minute {
+
+	q, to := p.Quiescence()
+	if q != 20*time.Second || to != 10*time.Minute {
 		t.Fatalf("settle = %v %v", q, to)
 	}
-	if !strings.Contains(p.Prose(SecIntent), "exactly two new pods") {
-		t.Fatal("intent prose lost")
+	machine, skipped, prose, errs := p.Counts()
+	if errs != 0 || machine != 8 || skipped != 6 || prose < 3 {
+		t.Fatalf("counts machine=%d skipped=%d prose=%d errs=%d", machine, skipped, prose, errs)
 	}
 }
 
 func TestParseErrors(t *testing.T) {
-	p, err := Parse(strings.NewReader("# PLAN x\n## EXPECT\n- create pods/a/b x0\n- create pods/a/b twice\n## THROUGHOUT\n- count create pods/a/b ~ 2\n## SETTLE\n- quiet soon\n"))
+	src := `# PLAN x
+## SUBTREE
+- not-a-ref
+## EXPECT
+- machines/x ×2 exploded
+- [bad label] after
+- machines/x ×2
+## SETTLE
+- quiescence soon
+## NEVER
+- elsewhere changed except nonsense
+`
+	p, err := Parse(strings.NewReader(src))
 	if err != nil {
 		t.Fatal(err)
 	}
-	errs := 0
-	for _, l := range p.Lines {
-		if l.Err != "" {
-			errs++
-		}
-	}
-	if errs != 4 {
+	_, _, _, errs := p.Counts()
+	if errs != 5 {
 		for _, l := range p.Lines {
-			t.Logf("%d %q err=%q prose=%v", l.LineNo, l.Text, l.Err, l.Prose)
+			t.Logf("L%d %q err=%q prose=%v skip=%v", l.LineNo, l.Text, l.Err, l.Prose, l.Skipped)
 		}
-		t.Fatalf("errors = %d, want 4", errs)
+		t.Fatalf("errors = %d, want 5", errs)
 	}
 }
 
@@ -120,7 +182,7 @@ func TestDefaults(t *testing.T) {
 	if p.Name != "unnamed" {
 		t.Fatal("default name")
 	}
-	q, to := p.Quiet()
+	q, to := p.Quiescence()
 	if q != 10*time.Second || to != 5*time.Minute {
 		t.Fatal("default settle")
 	}

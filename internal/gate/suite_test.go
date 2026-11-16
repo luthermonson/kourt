@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/luthermonson/litecone/internal/timeline"
 )
 
 func TestSuiteExitCodes(t *testing.T) {
@@ -15,6 +17,10 @@ func TestSuiteExitCodes(t *testing.T) {
 	s.Add(&Verdict{Pass: true})
 	if s.ExitCode() != ExitPass {
 		t.Fatal("one passing plan -> 0")
+	}
+	s.Add(&Verdict{Pass: true, Skipped: 3})
+	if s.ExitCode() != ExitPass {
+		t.Fatal("SKIPPED assertions do not fail CI")
 	}
 	s.Add(&Verdict{Pass: false})
 	if s.ExitCode() != ExitFail {
@@ -40,36 +46,45 @@ func TestFailSettleIsAGateFailure(t *testing.T) {
 
 func TestFailClosedOnEmptyPlan(t *testing.T) {
 	p := parse(t, "# PLAN empty\n## INTENT\nnothing checkable\n")
-	v := Judge(p, scaleRun())
-	if v.Pass || !strings.Contains(v.Checks[len(v.Checks)-1].Reason, "no machine-checkable") {
+	v := Judge(p, newTL().run(0, 1))
+	if v.Pass || !strings.Contains(v.Checks[len(v.Checks)-1].Reason, "no structural") {
 		t.Fatalf("empty plan must fail closed: %+v", v.Checks)
 	}
 }
 
-func TestExplicitNothingHappenedPasses(t *testing.T) {
-	// The only way to assert "nothing happened" is to say so.
-	p := parse(t, "# PLAN quiet\n## THROUGHOUT\n- count any ** == 0\n")
-	r := scaleRun()
-	r.Events = nil
-	if v := Judge(p, r); !v.Pass {
-		t.Fatalf("explicit zero-count on an empty window must pass: %+v", v.Checks)
+func TestFailClosedWhenEverythingIsSkipped(t *testing.T) {
+	// Only field-level assertions: nothing structural was evaluated, so the
+	// plan cannot go green on SKIPPED alone.
+	p := parse(t, "# PLAN fields\n## SUBTREE\n- clusters/demo\n## EXPECT\n- clusters/demo phase Pending→Provisioned\n- clusters/demo condition Ready=True\n")
+	v := Judge(p, clusterCreate().run(1000, 1100))
+	if v.Pass || v.Skipped != 2 {
+		t.Fatalf("all-skipped plan must fail closed with the skips visible: pass=%v skipped=%d", v.Pass, v.Skipped)
 	}
-	// ...and it fails when something did happen.
-	if v := Judge(p, scaleRun()); v.Pass {
-		t.Fatal("explicit zero-count must fail when events exist")
+	if !strings.Contains(v.Checks[len(v.Checks)-1].Reason, "all 2 assertions are SKIPPED") {
+		t.Fatalf("reason: %s", v.Checks[len(v.Checks)-1].Reason)
 	}
 }
 
 func TestFailureScenarioPlan(t *testing.T) {
 	// "apply an invalid CR -> the controller creates NO children": the gate
 	// must FAIL if children appear.
-	p := parse(t, "# PLAN invalid-cr\n## EXPECT\n1. update deployments/default/podinfo\n## NEVER\n- create pods/default/podinfo-*\n")
-	if v := Judge(p, scaleRun()); v.Pass {
-		t.Fatal("children appeared; the NEVER must trip")
+	p := parse(t, `# PLAN invalid-cr
+## SUBTREE
+- clusters/demo
+## EXPECT
+- clusters/demo created
+## THROUGHOUT
+- machines/demo-* ×0 created
+## NEVER
+- machinesets/demo-* created
+`)
+	if v := Judge(p, clusterCreate().run(1000, 1100)); v.Pass {
+		t.Fatal("children appeared; the NEVER and the ×0 must trip")
 	}
-	r := scaleRun()
-	r.Events = r.Events[:1] // only the deployment update
-	if v := Judge(p, r); !v.Pass {
-		t.Fatalf("no children -> pass: %+v", v.Checks)
+	only := newTL()
+	only.ev(1001, timeline.OpCreate, kCluster)
+	if v := Judge(p, only.run(1000, 1100)); !v.Pass {
+		dump(t, v)
+		t.Fatal("no children -> pass")
 	}
 }

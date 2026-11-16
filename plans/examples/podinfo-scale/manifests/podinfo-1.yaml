@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litecone-podinfo
+  namespace: default
+  labels:
+    app.kubernetes.io/managed-by: litecone
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: litecone-podinfo
+  template:
+    metadata:
+      labels:
+        app: litecone-podinfo
+    spec:
+      containers:
+        - name: podinfo
+          image: ghcr.io/stefanprodan/podinfo:6.7.1
+          ports:
+            - containerPort: 9898

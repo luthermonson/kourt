@@ -1,17 +1,26 @@
 # PLAN fixture-must-pass
 
 ## INTENT
-Scaling podinfo touches the Deployment, its ReplicaSet and creates two Pods, in that order. The stray configmap write is explicitly excepted.
+Scaling podinfo touches the Deployment and its ReplicaSet, then creates two Pods under the ReplicaSet. The stray configmap write is explicitly excepted. Deployment status writes trail the pods, so no edge is drawn from the deployment to the pods.
+
+## SUBTREE
+- deployments/podinfo
 
 ## EXPECT
-1. update deployments/default/podinfo
-2. update replicasets/default/podinfo-*
-3. create pods/default/podinfo-* x2
+[deploy]
+- deployments/podinfo ×2 updated
+
+[rs]
+- replicasets/podinfo-* updated
+
+[pods] after rs
+- pods/podinfo-* ×2 created-by replicasets/podinfo-*
+- pods/podinfo-* condition Ready=True
 
 ## THROUGHOUT
-- count create pods/default/podinfo-* == 2
-- count delete ** == 0
+- pods/podinfo-* ×2 created
+- */* ×0 deleted
 
 ## NEVER
-- outside deployments/default/podinfo except configmaps/kube-system/stray
-- delete pods/default/podinfo-*
+- elsewhere changed except configmaps/stray
+- pods/podinfo-* deleted

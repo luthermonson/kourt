@@ -55,12 +55,32 @@ func (c *Capturer) logf(format string, args ...any) {
 // known cost. Journal `head` is a sequence number, not a revision, so it
 // cannot stand in for this.
 func (c *Capturer) Head(ctx context.Context) (int64, error) {
+	return c.HeadWhere(ctx, nil)
+}
+
+// HeadWhere is Head restricted to beads whose key satisfies keep (nil keeps
+// all). Settling uses it with the plan's background filter: node leases and
+// friends renew every few seconds, so the unfiltered head never goes quiet
+// on a live cluster.
+func (c *Capturer) HeadWhere(ctx context.Context, keep func(key string) bool) (int64, error) {
+	if keep == nil {
+		return c.HeadWhereIssue(ctx, nil)
+	}
+	return c.HeadWhereIssue(ctx, func(is *beads.Issue) bool { return keep(is.Key()) })
+}
+
+// HeadWhereIssue is HeadWhere with the whole issue available to the filter
+// (its id is needed to resolve ownership while settling on a subtree).
+func (c *Capturer) HeadWhereIssue(ctx context.Context, keep func(is *beads.Issue) bool) (int64, error) {
 	issues, err := c.Client.ListIssues(ctx, Label)
 	if err != nil {
 		return 0, err
 	}
 	var head int64
 	for i := range issues {
+		if keep != nil && !keep(&issues[i]) {
+			continue
+		}
 		r, err := kine.ParseRec(issues[i].Description)
 		if err != nil {
 			continue
@@ -297,37 +317,13 @@ func (c *Capturer) resolveOwners(ctx context.Context, run *Run) error {
 			continue
 		}
 		seen[e.Key] = true
-		nodes, err := c.Client.Tree(ctx, e.BeadID, "down", depth)
+		chain, err := c.OwnerChain(ctx, e.BeadID, depth)
 		if err != nil {
 			// A deleted bead may be gone; ownership from the journal (dep_add) stands.
 			if run.Owners[e.Key] == nil {
 				run.Owners[e.Key] = []string{}
 			}
 			continue
-		}
-		// Rebuild the chain root -> ... by following parent_id links from
-		// the root row; the "down" walk lists owners as children of the row
-		// that depends on them.
-		byID := map[string]beads.TreeNode{}
-		for _, n := range nodes {
-			byID[n.ID] = n
-		}
-		chain := []string{}
-		cur := e.BeadID
-		for i := 0; i < depth; i++ {
-			next := ""
-			for _, n := range nodes {
-				if n.ParentID == cur && n.Depth > 0 && !n.Deduped {
-					next = n.ID
-					break
-				}
-			}
-			if next == "" {
-				break
-			}
-			n := byID[next]
-			chain = append(chain, n.Key())
-			cur = next
 		}
 		if len(chain) == 0 {
 			chain = run.Owners[e.Key]
@@ -338,4 +334,39 @@ func (c *Capturer) resolveOwners(ctx context.Context, run *Run) error {
 		run.Owners[e.Key] = chain
 	}
 	return nil
+}
+
+// OwnerChain returns the owner keys of a bead, nearest first, by walking
+// the dependency tree "down" from the owned object (child depends on
+// parent) and following parent_id links from the root row.
+func (c *Capturer) OwnerChain(ctx context.Context, beadID string, depth int) ([]string, error) {
+	if depth <= 0 {
+		depth = 16
+	}
+	nodes, err := c.Client.Tree(ctx, beadID, "down", depth)
+	if err != nil {
+		return nil, err
+	}
+	byID := map[string]beads.TreeNode{}
+	for _, n := range nodes {
+		byID[n.ID] = n
+	}
+	chain := []string{}
+	cur := beadID
+	for i := 0; i < depth; i++ {
+		next := ""
+		for _, n := range nodes {
+			if n.ParentID == cur && n.Depth > 0 && !n.Deduped {
+				next = n.ID
+				break
+			}
+		}
+		if next == "" {
+			break
+		}
+		n := byID[next]
+		chain = append(chain, n.Key())
+		cur = next
+	}
+	return chain, nil
 }

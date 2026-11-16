@@ -1,8 +1,12 @@
 # PLAN fixture-bad-syntax
 
+## SUBTREE
+- deployments/podinfo
+
 ## EXPECT
-1. create pods/default/podinfo-* x0
-2. create pods/default/podinfo-* twice over
+- pods/podinfo-* ×2 exploded
+- [group label] after
+- pods/podinfo-* ×2
 
 ## THROUGHOUT
-- count create pods/default/podinfo-* ~ 2
+- pods/podinfo-* ×2 created

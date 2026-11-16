@@ -42,6 +42,7 @@ type junitCase struct {
 	Time      string        `xml:"time,attr"`
 	Failure   *junitMessage `xml:"failure,omitempty"`
 	Error     *junitMessage `xml:"error,omitempty"`
+	Skipped   *junitMessage `xml:"skipped,omitempty"`
 	SystemOut string        `xml:"system-out,omitempty"`
 }
 
@@ -79,6 +80,20 @@ func WriteJUnit(w io.Writer, s *gate.Suite) error {
 		}
 		js.Tests++
 		js.Cases = append(js.Cases, tc)
+		// Every SKIPPED assertion is its own skipped testcase, so the roadmap
+		// (field decode, provenance) is visible in the CI report rather than
+		// green-washed into the plan's pass.
+		for _, c := range v.Checks {
+			if c.Status != "skip" {
+				continue
+			}
+			js.Tests++
+			js.Skipped++
+			js.Cases = append(js.Cases, junitCase{
+				Name: fmt.Sprintf("%s :: %s L%d %s", v.Plan, c.Section, c.LineNo, c.Text), ClassName: "litecone.assertion", Time: "0",
+				Skipped: &junitMessage{Message: c.Reason},
+			})
+		}
 	}
 	for _, e := range s.Errors {
 		js.Tests++
