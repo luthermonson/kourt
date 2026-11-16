@@ -213,6 +213,10 @@ pack/                  the Gas City pack (skills, formulas, agent, orders, docto
 ci/                    up.sh / down.sh for the e2e workflow
 ```
 
+## License
+
+MIT — see [LICENSE](LICENSE).
+
 ## Further reading
 
 - [docs/agentic-judge.md](docs/agentic-judge.md) — the gc judge + remand-bead flow end to end, and the full CI workflow (boot k3s-on-beads, gate, judge, upload artifacts).
