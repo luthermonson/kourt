@@ -22,9 +22,9 @@ import (
 	"path"
 	"strings"
 
-	"github.com/luthermonson/kourt/internal/kine"
-	"github.com/luthermonson/kourt/internal/plan"
-	"github.com/luthermonson/kourt/internal/timeline"
+	"github.com/luthermonson/kourt/pkg/kine"
+	"github.com/luthermonson/kourt/pkg/plan"
+	"github.com/luthermonson/kourt/pkg/timeline"
 )
 
 // Evidence cites one event.

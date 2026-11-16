@@ -1,7 +1,7 @@
 # The kourt plan format
 
 > **Status: grammar LOCKED by the repo owner (2026-11-15).** The parser
-> (`internal/plan`) implements exactly this. What the gate can evaluate
+> (`pkg/plan`) implements exactly this. What the gate can evaluate
 > today versus what it parses but reports **SKIPPED** is spelled out below;
 > nothing is silently passed. `kourt lint <plan.md|dir>` tells you, per
 > line, whether it is machine-checked, skipped, prose, or malformed.
@@ -253,7 +253,7 @@ was touched — absence is asserted, never assumed.
 
 ## Both example plans are unit-tested
 
-`internal/gate/gate_test.go` parses both files and evaluates them against
+`pkg/gate/gate_test.go` parses both files and evaluates them against
 synthetic timelines: a healthy run (structural pass, N SKIPPED), a
 misordered run (node before control plane; stray write elsewhere), a
 Machine delete (NEVER + THROUGHOUT trip), and a rollout-instead-of-scale.

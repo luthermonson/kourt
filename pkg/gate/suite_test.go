@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/luthermonson/kourt/internal/timeline"
+	"github.com/luthermonson/kourt/pkg/timeline"
 )
 
 func TestSuiteExitCodes(t *testing.T) {

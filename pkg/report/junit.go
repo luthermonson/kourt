@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/luthermonson/kourt/internal/gate"
+	"github.com/luthermonson/kourt/pkg/gate"
 )
 
 // JUnit XML, in the shape GitHub Actions / Jenkins / GitLab publishers read:

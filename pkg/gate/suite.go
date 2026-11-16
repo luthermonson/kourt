@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/luthermonson/kourt/internal/plan"
+	"github.com/luthermonson/kourt/pkg/plan"
 )
 
 // Exit codes: the binary's CI contract.

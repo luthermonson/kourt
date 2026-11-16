@@ -198,14 +198,14 @@ it needed `CGO_ENABLED=1 -tags gms_pure_go`.
 
 ```
 cmd/kourt/          the CLI (urfave/cli v2) + exit-code tests and fixtures
-internal/beads/        net/http client for the beads /v0 API
-internal/kine/         the k3s-on-beads object model (keys, {v,cr,mr,del})
-internal/timeline/     Event/Run model, journal + snapshot capture, diff, owner chains
-internal/plan/         the plan parser (PLAN-FORMAT.md)
-internal/gate/         the deterministic oracle + Suite/exit codes
-internal/report/       JUnit
-internal/k8s/          client-go server-side apply / delete
-internal/packcheck/    tests that validate pack/ (TOML, step graph, skills, doctor)
+pkg/beads/        net/http client for the beads /v0 API
+pkg/kine/         the k3s-on-beads object model (keys, {v,cr,mr,del})
+pkg/timeline/     Event/Run model, journal + snapshot capture, diff, owner chains
+pkg/plan/         the plan parser (PLAN-FORMAT.md)
+pkg/gate/         the deterministic oracle + Suite/exit codes
+pkg/report/       JUnit
+pkg/k8s/          client-go server-side apply / delete
+pkg/packcheck/    tests that validate pack/ (TOML, step graph, skills, doctor)
 plans/examples/        capi-cluster-create, capi-autoscale-up (unit-tested), smoke-configmap, podinfo-scale
 pack/                  the Gas City pack (skills, formulas, agent, orders, doctor)
 ci/                    up.sh / down.sh for the e2e workflow

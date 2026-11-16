@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/luthermonson/kourt/internal/plan"
-	"github.com/luthermonson/kourt/internal/timeline"
+	"github.com/luthermonson/kourt/pkg/plan"
+	"github.com/luthermonson/kourt/pkg/timeline"
 )
 
 // ---- synthetic timelines -------------------------------------------------------

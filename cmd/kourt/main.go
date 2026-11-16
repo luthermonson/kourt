@@ -1,7 +1,7 @@
 // Command kourt is the causality-first test oracle for Kubernetes
 // controllers running on k3s-on-beads. See README.md.
 //
-// Exit codes (the CI contract, see internal/gate/suite.go):
+// Exit codes (the CI contract, see pkg/gate/suite.go):
 //
 //	0  every plan passed
 //	1  one or more plans failed a gate assertion
@@ -26,13 +26,13 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	"github.com/luthermonson/kourt/internal/beads"
-	"github.com/luthermonson/kourt/internal/gate"
-	"github.com/luthermonson/kourt/internal/k8s"
-	"github.com/luthermonson/kourt/internal/kine"
-	"github.com/luthermonson/kourt/internal/plan"
-	"github.com/luthermonson/kourt/internal/report"
-	"github.com/luthermonson/kourt/internal/timeline"
+	"github.com/luthermonson/kourt/pkg/beads"
+	"github.com/luthermonson/kourt/pkg/gate"
+	"github.com/luthermonson/kourt/pkg/k8s"
+	"github.com/luthermonson/kourt/pkg/kine"
+	"github.com/luthermonson/kourt/pkg/plan"
+	"github.com/luthermonson/kourt/pkg/report"
+	"github.com/luthermonson/kourt/pkg/timeline"
 )
 
 // version is set by the Makefile / goreleaser via -ldflags.

@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/luthermonson/kourt/internal/beads"
-	"github.com/luthermonson/kourt/internal/kine"
+	"github.com/luthermonson/kourt/pkg/beads"
+	"github.com/luthermonson/kourt/pkg/kine"
 )
 
 // Source selects where a timeline comes from.

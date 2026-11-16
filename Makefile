@@ -37,7 +37,7 @@ cross: ## cross-compile for linux/darwin/windows x amd64/arm64
 	done
 
 pack-check: ## validate the pack skeleton (TOML, step graph, skills, doctor)
-	go test ./internal/packcheck/
+	go test ./pkg/packcheck/
 
 clean:
 	rm -rf bin dist
