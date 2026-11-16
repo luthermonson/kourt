@@ -7,7 +7,9 @@ it matches (Chainsaw, kuttl, `Eventually(...)`), kourt **judges the
 committed, ordered, revision-stamped timeline of what a controller actually
 did**.
 
-The name is relativity's light cone. Fix the stimulus — the manifest you
+**kourt** puts the controller on trial: the plan is the charge, the committed
+timeline is the evidence, the gate is the law, and a verdict is pass or fail.
+The model it reasons in is relativity's light cone. Fix the stimulus — the manifest you
 apply. Its **PAST cone** is what had to hold first (GIVEN). Its **FUTURE
 cone** is what the controller must cause, in causal order (EXPECT). Its
 **ELSEWHERE** is everything causally unrelated, which must not have moved
