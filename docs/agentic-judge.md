@@ -110,7 +110,7 @@ machine-readable hand-off a coding agent or the remand bead points at.
     # for the flake suite: set MIRAGE_GHOST_NODE_RATE on the mirage deployment
 
 - name: kourt gate
-  env: { LITECONE_BEADS: http://127.0.0.1:8099 }   # KOURT_BEADS once renamed
+  env: { KOURT_BEADS: http://127.0.0.1:8099 }
   run: kourt test plans/ --report junit --report-path junit.xml   # exit code = job result
 
 - name: judge (optional, explains failures)
