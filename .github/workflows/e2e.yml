@@ -1,0 +1,78 @@
+# Sample end-to-end workflow: boot k3s-on-beads, deploy the controller under
+# test, run every plan under plans/, publish JUnit, tear down.
+#
+# SKELETON (not yet exercised on a hosted runner; see ci/up.sh for the open
+# kine-beads build question). The two load-bearing properties are already
+# right: teardown runs `if: always()`, and `litecone test` exits non-zero on
+# any failed plan, which fails the job.
+name: e2e
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write        # for the JUnit publisher
+  pull-requests: write
+
+jobs:
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build litecone
+        run: make build && echo "$PWD/bin" >> "$GITHUB_PATH"
+
+      - name: Lint plans (exit 2 on a broken plan, before any cluster exists)
+        run: litecone lint plans/
+
+      - name: Boot k3s-on-beads
+        run: ./ci/up.sh
+        # exports KUBECONFIG and LITECONE_BEADS into $GITHUB_ENV
+
+      - name: Deploy the controller under test
+        # Replace with your controller's install. Example:
+        #   kubectl apply -k config/default && kubectl -n my-system rollout status deploy/my-controller
+        run: |
+          kubectl get nodes
+          litecone info
+
+      - name: Run plans
+        # Non-zero exit = red check. 1 = a gate assertion failed (cited in the
+        # JUnit <failure>), 2 = could not run.
+        run: |
+          litecone test plans/ \
+            --cleanup \
+            --out-dir .litecone \
+            --report junit --report-path .litecone/junit.xml
+
+      - name: Publish JUnit
+        if: always()
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: .litecone/junit.xml
+          check_name: litecone plans
+          fail_on_failure: false   # the test step already failed the job; this only annotates
+
+      - name: Upload run files and verdicts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: litecone-runs
+          path: |
+            .litecone/
+            ~/k3s-beads/log/
+          if-no-files-found: ignore
+
+      - name: Tear down
+        if: always()
+        run: ./ci/down.sh
