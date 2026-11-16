@@ -67,12 +67,20 @@ for _ in $(seq 1 30); do dolt sql-client -H 127.0.0.1 -P "$DOLT_PORT" -u root -q
 printf 'events-journal: true\nevents-journal-retain-days: 1\n' > "$WORKDIR/.beads/config.yaml"
 export BD_EVENTS_JOURNAL=1
 
-# 4. kine-beads (server mode)
+# 4. kine-beads (server mode) — prefer the published release binary, which
+#    sidesteps the CGO/Dolt build entirely; fall back to building from source.
+KINE_RELEASE="${KINE_RELEASE:-beads-v0.1.0}"
 if [ ! -x "$WORKDIR/bin/kine-beads" ]; then
-  log "building kine-beads from $KINE_REPO@$KINE_BRANCH"
-  git clone --depth 1 --branch "$KINE_BRANCH" "$KINE_REPO" "$WORKDIR/kine-src"
-  # See the CGO note at the top of this file.
-  (cd "$WORKDIR/kine-src" && CGO_ENABLED=1 go build -tags gms_pure_go -o "$WORKDIR/bin/kine-beads" .)
+  case "$(uname -m)" in x86_64) karch=amd64;; aarch64|arm64) karch=arm64;; *) karch="$(uname -m)";; esac
+  url="https://github.com/luthermonson/kine/releases/download/${KINE_RELEASE}/kine-beads-linux-${karch}"
+  log "downloading kine-beads ${KINE_RELEASE} (linux/${karch})"
+  if curl -fsSL "$url" -o "$WORKDIR/bin/kine-beads"; then
+    chmod +x "$WORKDIR/bin/kine-beads"
+  else
+    log "release download failed; building kine-beads from $KINE_REPO@$KINE_BRANCH"
+    git clone --depth 1 --branch "$KINE_BRANCH" "$KINE_REPO" "$WORKDIR/kine-src"
+    (cd "$WORKDIR/kine-src" && CGO_ENABLED=1 go build -tags gms_pure_go -o "$WORKDIR/bin/kine-beads" .)
+  fi
 fi
 log "starting kine-beads on :$KINE_PORT"
 nohup "$WORKDIR/bin/kine-beads" \

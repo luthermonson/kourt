@@ -1,29 +1,40 @@
-# Sample end-to-end workflow: boot k3s-on-beads, deploy the controller under
-# test, run every plan under plans/, publish JUnit, tear down.
+# End-to-end: boot k3s-on-beads with the released kine-beads binary, deploy
+# Cluster API core + the mirage fake provider, then prove kourt itself —
+#   - clean lifecycle  -> informational smoke
+#   - injected flake   -> kourt MUST catch it (exit 1) = the meta-test
+# and, when ANTHROPIC_API_KEY is set, run the narrative judge over the results.
 #
-# SKELETON (not yet exercised on a hosted runner; see ci/up.sh for the open
-# kine-beads build question). The two load-bearing properties are already
-# right: teardown runs `if: always()`, and `kourt test` exits non-zero on
-# any failed plan, which fails the job.
+# Load-bearing properties: teardown is `if: always()`, the flake step asserts
+# the exit code (a kourt that stops catching the flake fails the job), and the
+# judge step no-ops without a key so the gate runs tokenless.
+#
+# NOTE: the boot (ci/up.sh) and this deploy have not yet been exercised on a
+# hosted runner — the first `workflow_dispatch` will shake out stack quirks.
+# The gate logic, the released binaries, and the judge call are real.
 name: e2e
 
 on:
-  pull_request:
   push:
     branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-  checks: write        # for the JUnit publisher
-  pull-requests: write
+  checks: write
 
 jobs:
   e2e:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout kourt
+        uses: actions/checkout@v4
+
+      - name: Checkout mirage (the controller under test)
+        uses: actions/checkout@v4
+        with:
+          repository: luthermonson/cluster-api-provider-mirage
+          path: mirage
 
       - uses: actions/setup-go@v5
         with:
@@ -33,44 +44,67 @@ jobs:
         run: make build && echo "$PWD/bin" >> "$GITHUB_PATH"
 
       - name: Lint plans (exit 2 on a broken plan, before any cluster exists)
-        run: kourt lint plans/
+        run: kourt lint plans/capi-live.plan.md plans/capi-flake.plan.md
 
-      - name: Boot k3s-on-beads
-        run: ./ci/up.sh
-        # exports KUBECONFIG and KOURT_BEADS into $GITHUB_ENV
+      - name: Boot k3s-on-beads (released kine-beads + dolt + bd serve)
+        run: ./ci/up.sh      # exports KUBECONFIG and KOURT_BEADS into $GITHUB_ENV
 
-      - name: Deploy the controller under test
-        # Replace with your controller's install. Example:
-        #   kubectl apply -k config/default && kubectl -n my-system rollout status deploy/my-controller
+      - name: Install CAPI core + cert-manager, deploy mirage
         run: |
-          kubectl get nodes
+          set -euo pipefail
+          make -C mirage capi-init                      # cert-manager + Cluster API CORE only
+          docker build -t ghcr.io/luthermonson/cluster-api-provider-mirage:dev mirage
+          docker save ghcr.io/luthermonson/cluster-api-provider-mirage:dev \
+            | sudo k3s ctr -n k8s.io images import -
+          kubectl apply -k mirage/config/default
+          kubectl -n mirage-system rollout status deploy/mirage-controller-manager --timeout=180s
           kourt info
 
-      - name: Run plans
-        # Non-zero exit = red check. 1 = a gate assertion failed (cited in the
-        # JUnit <failure>), 2 = could not run.
+      - name: Smoke — clean lifecycle (informational; fault off)
+        continue-on-error: true
         run: |
-          kourt test plans/ \
-            --cleanup \
-            --out-dir .kourt \
-            --report junit --report-path .kourt/junit.xml
+          kourt --source snapshot test plans/capi-live.plan.md \
+            --cleanup --out-dir .kourt --report junit --report-path .kourt/live-junit.xml
+          echo "capi-live exit: $?  (informational — live happy-path not yet asserted)"
+
+      - name: Meta-test — kourt MUST catch the injected flake
+        run: |
+          set +e
+          # turn the fault on so new provisions leak an orphan ghost Node
+          kubectl -n mirage-system set env deploy/mirage-controller-manager MIRAGE_GHOST_NODE_RATE=40
+          kubectl -n mirage-system rollout status deploy/mirage-controller-manager --timeout=120s
+          kourt --source snapshot test plans/capi-flake.plan.md \
+            --cleanup --out-dir .kourt --report junit --report-path .kourt/flake-junit.xml
+          rc=$?
+          case $rc in
+            1) echo "✓ kourt caught the flake (exit 1) — meta-test PASS"; exit 0 ;;
+            0) echo "✗ kourt did NOT catch the flake (exit 0) — meta-test FAIL"; exit 1 ;;
+            *) echo "✗ kourt could not run (exit $rc)"; exit 1 ;;
+          esac
+
+      - name: Narrative judge (optional — runs only if ANTHROPIC_API_KEY is set)
+        if: always()
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          KOURT_JUDGE_MODEL: claude-haiku-5-5
+        run: ./ci/judge.sh .kourt
 
       - name: Publish JUnit
         if: always()
         uses: mikepenz/action-junit-report@v5
         with:
-          report_paths: .kourt/junit.xml
+          report_paths: '.kourt/*junit*.xml'
           check_name: kourt plans
-          fail_on_failure: false   # the test step already failed the job; this only annotates
+          fail_on_failure: false
 
-      - name: Upload run files and verdicts
+      - name: Upload runs, verdicts, judgments
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: kourt-runs
           path: |
             .kourt/
-            ~/k3s-beads/log/
+            ${{ env.KOURT_CI_DIR }}/log/
           if-no-files-found: ignore
 
       - name: Tear down
